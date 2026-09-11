@@ -93,6 +93,7 @@ function translateApiPlugin(): Plugin {
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [react(), translateApiPlugin()],
   server: {
     port: 5173,

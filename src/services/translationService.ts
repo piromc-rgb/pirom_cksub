@@ -149,8 +149,29 @@ export async function translateEnglishToThai(
     }
   }
 
-  // 2. Primary Fast Engine: Local Vite / Backend Server Proxy (/api/translate)
-  // This bypasses browser CORS entirely and executes translation on Node.js!
+  // 2. Primary Fast Engine: Google Chrome Extension endpoint (clients5)
+  // Has 'Access-Control-Allow-Origin: *' so it works directly in browser on GitHub Pages!
+  try {
+    const c5Url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=th&q=${encodeURIComponent(cleanText)}`;
+    const c5Res = await fetch(c5Url);
+    if (c5Res.ok) {
+      const c5Data: any = await c5Res.json();
+      if (Array.isArray(c5Data) && c5Data[0]) {
+        let result = typeof c5Data[0] === 'string' ? c5Data[0] : (Array.isArray(c5Data[0]) ? c5Data[0].join('') : '');
+        if (result) {
+          if (options?.customTerms) {
+            result = applyTerminology(result, options.customTerms);
+          }
+          translationCache.set(cacheKey, result);
+          return result;
+        }
+      }
+    }
+  } catch (c5Err) {
+    console.warn("Direct clients5 translation failed, trying local proxy fallback:", c5Err);
+  }
+
+  // 3. Fallback: Local Vite / Backend Server Proxy (/api/translate for local dev)
   try {
     const res = await fetch(`/api/translate?text=${encodeURIComponent(cleanText)}`);
     if (res.ok) {
