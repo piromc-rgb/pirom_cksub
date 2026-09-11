@@ -1,15 +1,38 @@
-import React, { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
-import { SubtitleSegment } from '../types/subtitle';
+import React, { useState, useRef, useEffect } from 'react';
+import { Copy, Check, ChevronDown } from 'lucide-react';
+import { SubtitleSegment, SpeakerProfile } from '../types/subtitle';
 import { AppSettings } from '../types/settings';
+import { getSpeakerBadgeClasses } from './SpeakerBar';
 
 interface SubtitleItemProps {
   segment: SubtitleSegment;
   settings: AppSettings;
+  speakers?: SpeakerProfile[];
+  onReassignSpeaker?: (segmentId: string, newSpeaker: SpeakerProfile) => void;
 }
 
-export const SubtitleItem: React.FC<SubtitleItemProps> = ({ segment, settings }) => {
+export const SubtitleItem: React.FC<SubtitleItemProps> = ({
+  segment,
+  settings,
+  speakers = [],
+  onReassignSpeaker,
+}) => {
   const [copied, setCopied] = useState(false);
+  const [isSpeakerMenuOpen, setIsSpeakerMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close speaker dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsSpeakerMenuOpen(false);
+      }
+    };
+    if (isSpeakerMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isSpeakerMenuOpen]);
 
   const handleCopy = () => {
     const text = `${segment.speaker}: ${segment.englishText}\n(ไทย): ${segment.thaiText}`;
@@ -41,13 +64,11 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({ segment, settings })
     emerald: 'text-emerald-300',
   }[settings.textColor];
 
-  // Generate deterministic speaker color
-  const getSpeakerBadgeStyle = (speaker: string) => {
-    if (speaker.includes('Sarah')) return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
-    if (speaker.includes('Alex')) return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
-    if (speaker.includes('David')) return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-    return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
-  };
+  // Get matching speaker profile
+  const matchedSpeaker = speakers.find(
+    (s) => s.id === segment.speakerId || s.name === segment.speaker
+  );
+  const speakerBadgeClass = getSpeakerBadgeClasses(matchedSpeaker?.color);
 
   return (
     <div
@@ -59,16 +80,54 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({ segment, settings })
     >
       {/* Top Meta: Speaker, Timestamp, Actions */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
           {settings.showSpeaker && (
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getSpeakerBadgeStyle(
-                segment.speaker
-              )}`}
-            >
-              🎙️ {segment.speaker}
-            </span>
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => segment.isFinal && onReassignSpeaker && setIsSpeakerMenuOpen(!isSpeakerMenuOpen)}
+                title={segment.isFinal && onReassignSpeaker ? 'คลิกเพื่อเปลี่ยนผู้พูดของประโยคนี้' : undefined}
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all ${speakerBadgeClass} ${
+                  segment.isFinal && onReassignSpeaker ? 'hover:brightness-125 cursor-pointer' : ''
+                }`}
+              >
+                <span>🎙️ {segment.speaker}</span>
+                {segment.isFinal && onReassignSpeaker && speakers.length > 1 && (
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                )}
+              </button>
+
+              {/* Speaker Re-assignment Popover */}
+              {isSpeakerMenuOpen && speakers.length > 0 && (
+                <div className="absolute left-0 top-full mt-1.5 z-40 bg-[#0e1422] border border-slate-700/90 rounded-xl p-1.5 shadow-2xl min-w-[140px] space-y-1 animate-fade-in">
+                  <div className="text-[10px] text-slate-400 px-2 py-1 font-semibold uppercase tracking-wider">
+                    เปลี่ยนผู้พูด:
+                  </div>
+                  {speakers.map((spk) => {
+                    const isSelected = spk.id === segment.speakerId || spk.name === segment.speaker;
+                    const badge = getSpeakerBadgeClasses(spk.color);
+                    return (
+                      <button
+                        key={spk.id}
+                        type="button"
+                        onClick={() => {
+                          onReassignSpeaker?.(segment.id, spk);
+                          setIsSpeakerMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-xs font-medium text-left transition-colors ${
+                          isSelected ? `${badge} font-bold` : 'text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>{spk.name}</span>
+                        {isSelected && <Check className="w-3 h-3 text-current" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
+
           {settings.showTimestamp && (
             <span className="text-xs text-slate-400 font-mono">
               {segment.timestamp}

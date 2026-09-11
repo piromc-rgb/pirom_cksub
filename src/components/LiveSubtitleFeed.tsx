@@ -14,6 +14,8 @@ interface LiveSubtitleFeedProps {
   currentInterim: SubtitleSegment | null;
   settings: AppSettings;
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void;
+  speakers?: import('../types/subtitle').SpeakerProfile[];
+  onReassignSpeaker?: (segmentId: string, newSpeaker: import('../types/subtitle').SpeakerProfile) => void;
 }
 
 export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
@@ -21,6 +23,8 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
   currentInterim,
   settings,
   onUpdateSettings,
+  speakers = [],
+  onReassignSpeaker,
 }) => {
   const feedEndRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,12 +158,23 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
 
         {/* Existing Confirmed Subtitles */}
         {filteredSubtitles.map((segment) => (
-          <SubtitleItem key={segment.id} segment={segment} settings={settings} />
+          <SubtitleItem 
+            key={segment.id} 
+            segment={segment} 
+            settings={settings}
+            speakers={speakers}
+            onReassignSpeaker={onReassignSpeaker}
+          />
         ))}
 
         {/* Current Active Interim Segment */}
         {currentInterim && (
-          <SubtitleItem key="interim-active" segment={currentInterim} settings={settings} />
+          <SubtitleItem 
+            key="interim-active" 
+            segment={currentInterim} 
+            settings={settings}
+            speakers={speakers}
+          />
         )}
 
         <div ref={feedEndRef} />
