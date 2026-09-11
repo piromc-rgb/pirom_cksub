@@ -88,19 +88,19 @@ export const FloatingPipBar: React.FC<FloatingPipBarProps> = ({
           <div className="p-3 sm:p-4 text-center min-h-[60px] flex flex-col justify-center items-center">
             {currentSubtitle ? (
               <div className="space-y-1 max-w-2xl">
-                {/* Thai Subtitle (Strictly Thai, never alternates with English) */}
+                {/* English Source Subtitle (Top Row) */}
+                {settings.displayMode !== 'thai-only' && (
+                  <p className="text-xs sm:text-sm text-slate-300 leading-normal font-normal">
+                    {currentSubtitle.englishText}
+                  </p>
+                )}
+
+                {/* Thai Subtitle (Bottom Row) */}
                 {settings.displayMode !== 'en-only' && currentSubtitle.thaiText ? (
                   <p className={`font-semibold tracking-wide text-sm sm:text-base leading-snug ${thaiColorClass}`}>
                     {currentSubtitle.thaiText}
                   </p>
                 ) : null}
-
-                {/* English Source Subtitle */}
-                {settings.displayMode !== 'thai-only' && (
-                  <p className="text-xs sm:text-sm text-slate-200 leading-normal font-normal">
-                    {currentSubtitle.englishText}
-                  </p>
-                )}
               </div>
             ) : (
               <div className="text-slate-500 text-xs flex items-center gap-2">

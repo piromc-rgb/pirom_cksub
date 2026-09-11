@@ -92,19 +92,19 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({ segment, settings })
         </button>
       </div>
 
-      {/* Subtitle Content */}
+      {/* Subtitle Content: English on Top Row, Thai on Bottom Row */}
       <div className="space-y-1.5">
-        {/* Thai Translated Subtitle (Primary) - Strictly Thai, never alternates with English, zero flicker */}
-        {(settings.displayMode === 'bilingual' || settings.displayMode === 'thai-only') && (
-          <div className={`font-semibold tracking-wide leading-relaxed ${thaiSizeClass} ${thaiColorClass} min-h-[1.25rem]`}>
-            {segment.thaiText || '\u00A0'}
+        {/* English Source Subtitle (Top Row) */}
+        {(settings.displayMode === 'bilingual' || settings.displayMode === 'en-only') && (
+          <div className={`text-slate-300 font-normal leading-relaxed ${enSizeClass}`}>
+            {segment.englishText}
           </div>
         )}
 
-        {/* English Source Subtitle */}
-        {(settings.displayMode === 'bilingual' || settings.displayMode === 'en-only') && (
-          <div className={`text-slate-200 font-normal leading-relaxed ${enSizeClass}`}>
-            {segment.englishText}
+        {/* Thai Translated Subtitle (Bottom Row) */}
+        {(settings.displayMode === 'bilingual' || settings.displayMode === 'thai-only') && (
+          <div className={`font-semibold tracking-wide leading-relaxed ${thaiSizeClass} ${thaiColorClass} min-h-[1.25rem]`}>
+            {segment.thaiText || '\u00A0'}
           </div>
         )}
       </div>

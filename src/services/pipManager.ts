@@ -125,11 +125,11 @@ export class SubtitlePiPManager {
     const thaiColor = this.settings.textColor === 'yellow' ? '#fde047' : this.settings.textColor === 'cyan' ? '#38bdf8' : '#ffffff';
 
     let content = '';
-    if ((this.settings.displayMode === 'bilingual' || this.settings.displayMode === 'thai-only') && sub.thaiText) {
-      content += `<div style="font-size: 14px; font-weight: 600; color: ${thaiColor}; line-height: 1.4; margin-bottom: 3px;">${sub.thaiText}</div>`;
-    }
     if (this.settings.displayMode === 'bilingual' || this.settings.displayMode === 'en-only') {
-      content += `<div style="font-size: 11px; color: #cbd5e1; opacity: 0.85; line-height: 1.3;">${sub.englishText}</div>`;
+      content += `<div style="font-size: 11px; color: #cbd5e1; opacity: 0.9; line-height: 1.3; margin-bottom: 3px;">${sub.englishText}</div>`;
+    }
+    if ((this.settings.displayMode === 'bilingual' || this.settings.displayMode === 'thai-only') && sub.thaiText) {
+      content += `<div style="font-size: 14px; font-weight: 600; color: ${thaiColor}; line-height: 1.4;">${sub.thaiText}</div>`;
     }
 
     body.innerHTML = `
@@ -174,19 +174,19 @@ export class SubtitlePiPManager {
           y += 25;
         }
 
-        // Thai Text (Strictly Thai, never alternates with English)
+        // English Text (Top Row)
+        if (this.settings.displayMode !== 'thai-only') {
+          ctx.fillStyle = '#cbd5e1';
+          ctx.font = '400 13px Inter, sans-serif';
+          ctx.fillText(this.currentSubtitle.englishText, 30, y, w - 60);
+          y += 26;
+        }
+
+        // Thai Text (Bottom Row)
         if (this.settings.displayMode !== 'en-only' && this.currentSubtitle.thaiText) {
           ctx.fillStyle = this.settings.textColor === 'yellow' ? '#fde047' : this.settings.textColor === 'cyan' ? '#38bdf8' : '#ffffff';
           ctx.font = '600 16px Prompt, sans-serif';
           ctx.fillText(this.currentSubtitle.thaiText, 30, y, w - 60);
-          y += 28;
-        }
-
-        // English Text
-        if (this.settings.displayMode !== 'thai-only') {
-          ctx.fillStyle = '#cbd5e1';
-          ctx.font = '400 12px Inter, sans-serif';
-          ctx.fillText(this.currentSubtitle.englishText, 30, y, w - 60);
         }
       }
 
