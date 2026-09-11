@@ -20,9 +20,20 @@ export const FloatingPipBar: React.FC<FloatingPipBarProps> = ({
   isNativePipActive,
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
 
-  if (!isVisible) return null;
+  if (!isVisible) {
+    return (
+      <button
+        onClick={() => setIsVisible(true)}
+        className="fixed bottom-5 right-5 z-40 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-cyan-300 border border-slate-700/80 hover:border-cyan-500/50 shadow-lg text-xs transition-all duration-200 cursor-pointer"
+        title="เปิดหน้าต่างคำบรรยายลอย (Open Floating Overlay)"
+      >
+        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+        <span>หน้าต่างลอย (Overlay)</span>
+      </button>
+    );
+  }
 
   const matchedSpeaker = speakers.find(
     (s) => s.id === currentSubtitle?.speakerId || s.name === currentSubtitle?.speaker
