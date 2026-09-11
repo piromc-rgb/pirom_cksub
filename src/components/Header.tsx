@@ -96,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Smart AI Summary */}
           <button
             onClick={onOpenSummary}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium bg-gradient-to-r from-indigo-600/30 to-cyan-600/30 hover:from-indigo-600/50 hover:to-cyan-600/50 border border-indigo-500/40 text-indigo-200 hover:text-white rounded-lg transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium bg-gradient-to-r from-indigo-600/30 to-cyan-600/30 hover:from-indigo-600/50 hover:to-cyan-600/50 border border-indigo-500/40 text-indigo-200 hover:text-white rounded-lg transition-all cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">AI Minutes</span>

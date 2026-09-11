@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   Sparkles, 
@@ -7,8 +7,9 @@ import {
   Check, 
   Copy, 
   Download, 
-  FileText,
-  Loader2
+  FileText, 
+  Loader2,
+  RotateCw
 } from 'lucide-react';
 import { SubtitleSegment, SpeakerProfile } from '../types/subtitle';
 import { AppSettings } from '../types/settings';
@@ -39,30 +40,8 @@ export const SmartSummaryModal: React.FC<SmartSummaryModalProps> = ({
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && subtitles.length > 0 && !summaryData) {
-      handleGenerate();
-    }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleGenerate = async () => {
-    setLoading(true);
-    try {
-      const res = await generateMeetingSummary(subtitles, {
-        geminiKey: settings.geminiApiKey,
-      });
-      setSummaryData(res);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Calculate speaker statistics
-  const speakerStats = React.useMemo(() => {
+  // Calculate speaker statistics - always executed at top level
+  const speakerStats = useMemo(() => {
     const total = subtitles.length;
     if (total === 0) return [];
 
@@ -87,6 +66,29 @@ export const SmartSummaryModal: React.FC<SmartSummaryModalProps> = ({
       })
       .sort((a, b) => b.count - a.count);
   }, [subtitles, speakers]);
+
+  const handleGenerate = async () => {
+    if (subtitles.length === 0) return;
+    setLoading(true);
+    try {
+      const res = await generateMeetingSummary(subtitles, {
+        geminiKey: settings.geminiApiKey,
+      });
+      setSummaryData(res);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && subtitles.length > 0 && !summaryData) {
+      handleGenerate();
+    }
+  }, [isOpen, subtitles.length]);
+
+  if (!isOpen) return null;
 
   const getMarkdownSummary = () => {
     if (!summaryData) return '';
@@ -152,12 +154,25 @@ ${summaryData.decisions.map(d => `- ✅ ${d}`).join('\n')}
               <p className="text-xs text-slate-400">สรุปใจความสำคัญ มติที่ประชุม และ Action Items เป็นภาษาไทย</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {subtitles.length > 0 && (
+              <button
+                onClick={handleGenerate}
+                disabled={loading}
+                title="สร้างสรุปใหม่จากบทสนทนาล่าสุด"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">สร้างสรุปใหม่</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
@@ -165,7 +180,10 @@ ${summaryData.decisions.map(d => `- ✅ ${d}`).join('\n')}
           {subtitles.length === 0 ? (
             <div className="text-center py-12 text-slate-400 space-y-3">
               <FileText className="w-12 h-12 mx-auto text-slate-600" />
-              <p className="text-sm">ยังไม่มีข้อมูลการประชุม กรุณาเริ่มบันทึกและแปลการประชุมก่อนสร้างสรุป</p>
+              <p className="text-sm font-medium text-slate-200">ยังไม่มีประโยคการประชุมในขณะนี้</p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+                กรุณากดปุ่ม <strong>"เริ่มแปลสด (Start Translation)"</strong> แล้วพูดสนทนาเพื่อให้ระบบเริ่มบันทึกประโยค จากนั้นระบบจะสร้างสรุปการประชุมอัจฉริยะ (AI Minutes) ให้ทันทีครับ
+              </p>
             </div>
           ) : loading ? (
             <div className="text-center py-16 space-y-3">
