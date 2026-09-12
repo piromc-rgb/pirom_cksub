@@ -26,6 +26,9 @@ import {
 import { 
   ExportModal 
 } from './components/ExportModal';
+import {
+  HeadphoneSetupModal
+} from './components/HeadphoneSetupModal';
 
 import { SubtitleSegment, AudioInputMode, SpeakerProfile, SpeakerColor, DEFAULT_SPEAKERS } from './types/subtitle';
 import { AppSettings, DEFAULT_SETTINGS } from './types/settings';
@@ -33,13 +36,14 @@ import { MeetingSpeechRecognizer } from './services/speechRecognition';
 import { translateEnglishToThai } from './services/translationService';
 import { SubtitlePiPManager } from './services/pipManager';
 import { SpeakerDiarizer } from './services/speakerDiarizer';
+import { StreamSpeechRecognizer } from './services/streamSpeechRecognizer';
 
 export const App: React.FC = () => {
   // State
   const [subtitles, setSubtitles] = useState<SubtitleSegment[]>([]);
   const [currentInterim, setCurrentInterim] = useState<SubtitleSegment | null>(null);
   const [isListening, setIsListening] = useState(false);
-  const [audioMode, setAudioMode] = useState<AudioInputMode>('mic');
+  const [audioMode, setAudioMode] = useState<AudioInputMode>('headphones'); // Default to headphones/tab for online meetings!
   const [isPipActive, setIsPipActive] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -79,11 +83,14 @@ export const App: React.FC = () => {
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isHeadphoneGuideOpen, setIsHeadphoneGuideOpen] = useState(false);
 
   // Services references
   const speechRecognizerRef = useRef<MeetingSpeechRecognizer | null>(null);
+  const streamSpeechRecognizerRef = useRef<StreamSpeechRecognizer | null>(null);
   const speakerDiarizerRef = useRef<SpeakerDiarizer | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioPassThroughContextRef = useRef<AudioContext | null>(null);
   const pipManagerRef = useRef<SubtitlePiPManager | null>(null);
   const interimTimeoutRef = useRef<any>(null);
   const meetingStartTimeRef = useRef<number>(Date.now());
@@ -101,6 +108,13 @@ export const App: React.FC = () => {
       }
       return updated;
     });
+
+    if (streamSpeechRecognizerRef.current) {
+      streamSpeechRecognizerRef.current.updateOptions({
+        geminiApiKey: newSettings.geminiApiKey || settings.geminiApiKey,
+        openaiApiKey: newSettings.openaiApiKey || settings.openaiApiKey,
+      });
+    }
   };
 
   // Initialize Speaker Diarizer
@@ -147,7 +161,36 @@ export const App: React.FC = () => {
     }
   }, [currentInterim, subtitles]);
 
-  // Initialize Speech Recognizer
+  // Initialize Stream Speech Recognizer (for direct digital headphone/tab audio)
+  useEffect(() => {
+    streamSpeechRecognizerRef.current = new StreamSpeechRecognizer(
+      {
+        onInterim: (text: string) => {
+          handleInterimSpeech(text);
+        },
+        onFinal: (text: string, confidence: number) => {
+          handleFinalSpeech(text, confidence);
+        },
+        onError: (err: string) => {
+          console.warn('Stream Speech Recognizer notice:', err);
+        },
+        onStatusChange: (listening: boolean) => {
+          setIsListening(listening);
+        },
+      },
+      {
+        geminiApiKey: settings.geminiApiKey,
+        openaiApiKey: settings.openaiApiKey,
+        enablePassThrough: true,
+      }
+    );
+
+    return () => {
+      streamSpeechRecognizerRef.current?.stop();
+    };
+  }, [settings.geminiApiKey, settings.openaiApiKey]);
+
+  // Initialize Microphone Speech Recognizer (Web Speech API)
   useEffect(() => {
     speechRecognizerRef.current = new MeetingSpeechRecognizer({
       onInterim: (text: string) => {
@@ -323,13 +366,23 @@ export const App: React.FC = () => {
   // Toggle listening
   const handleToggleListen = async () => {
     if (isListening) {
-      // Stop
+      // Stop all recording & recognizers
       speechRecognizerRef.current?.stop();
+      streamSpeechRecognizerRef.current?.stop();
       speakerDiarizerRef.current?.stop();
+
+      if (audioPassThroughContextRef.current) {
+        try {
+          audioPassThroughContextRef.current.close();
+        } catch (e) {}
+        audioPassThroughContextRef.current = null;
+      }
+
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach((t) => t.stop());
         audioStreamRef.current = null;
       }
+
       setIsVoiceActive(false);
       setIsListening(false);
       setCurrentInterim(null);
@@ -337,28 +390,54 @@ export const App: React.FC = () => {
       // Start
       meetingStartTimeRef.current = Date.now();
 
-      if (audioMode === 'tab') {
+      if (audioMode === 'headphones' || audioMode === 'tab') {
         try {
           if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-            const stream = await navigator.mediaDevices.getDisplayMedia({
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
               video: true,
               audio: true,
             });
-            audioStreamRef.current = stream;
-            // Stop video track since we only need meeting audio
-            stream.getVideoTracks().forEach((track) => track.stop());
 
-            if (stream.getAudioTracks().length > 0) {
-              speakerDiarizerRef.current?.start(stream);
+            // Stop unused video track
+            displayStream.getVideoTracks().forEach((track) => track.stop());
+
+            const audioTracks = displayStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+              alert('คำเตือน: คุณไม่ได้ติ๊ก "แชร์เสียงของแท็บ (Share tab audio)" กรุณากดเริ่มใหม่อีกครั้งแล้วติ๊กแชร์เสียงด้วยนะครับ');
+              displayStream.getTracks().forEach((t) => t.stop());
+              return;
             }
+
+            // Audio Pass-Through: Route sound to headphones so user can hear normally
+            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioCtx) {
+              const passThroughCtx = new AudioCtx();
+              audioPassThroughContextRef.current = passThroughCtx;
+              const source = passThroughCtx.createMediaStreamSource(displayStream);
+              source.connect(passThroughCtx.destination);
+            }
+
+            audioStreamRef.current = displayStream;
+
+            // Start Diarizer with digital tab stream
+            speakerDiarizerRef.current?.start(displayStream);
+
+            // Transcribe:
+            if (settings.geminiApiKey || settings.openaiApiKey) {
+              // Direct digital stream transcription (ideal for headphones!)
+              streamSpeechRecognizerRef.current?.start(displayStream);
+            } else {
+              // Web Speech API fallback (if using BlackHole / Stereo Mix)
+              speechRecognizerRef.current?.start();
+            }
+
+            setIsListening(true);
           }
         } catch (e) {
-          console.log('Tab audio request dismissed or not supported:', e);
+          console.log('Headphone/Tab audio request cancelled:', e);
         }
-        speechRecognizerRef.current?.start();
-        setIsListening(true);
       } else {
-        // Direct Microphone
+        // Direct Microphone mode
         try {
           if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -445,6 +524,7 @@ export const App: React.FC = () => {
           onClearTranscript={handleClearTranscript}
           subtitleCount={subtitles.length}
           activeSpeaker={activeSpeakerProfile?.name}
+          onOpenHeadphoneGuide={() => setIsHeadphoneGuideOpen(true)}
         />
 
         {/* Multi-Speaker Management Bar */}
@@ -508,6 +588,13 @@ export const App: React.FC = () => {
         onClose={() => setIsExportOpen(false)}
         subtitles={subtitles}
         settings={settings}
+      />
+
+      <HeadphoneSetupModal
+        isOpen={isHeadphoneGuideOpen}
+        onClose={() => setIsHeadphoneGuideOpen(false)}
+        settings={settings}
+        onSaveSettings={handleUpdateSettings}
       />
     </div>
   );

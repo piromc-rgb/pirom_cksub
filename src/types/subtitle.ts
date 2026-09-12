@@ -26,7 +26,7 @@ export interface SubtitleSegment {
   confidence?: number;
 }
 
-export type AudioInputMode = 'mic' | 'tab';
+export type AudioInputMode = 'mic' | 'tab' | 'headphones';
 
 export interface MeetingSummaryData {
   title: string;
