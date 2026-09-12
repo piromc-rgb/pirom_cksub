@@ -96,6 +96,8 @@ export const App: React.FC = () => {
   const lastTranslatedTextRef = useRef<string>('');
   const lastFinalTextRef = useRef<string>('');
   const lastFinalTimeRef = useRef<number>(0);
+  const lastDispatchTimeRef = useRef<number>(0);
+  const pendingDispatchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Save settings
   const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
@@ -243,12 +245,17 @@ export const App: React.FC = () => {
   };
 
   // Real-time continuous streaming translation pipeline
-  const triggerStreamingTranslation = (text: string) => {
-    queuedTextRef.current = text;
+  // Throttled to a minimum interval between dispatches: the Web Speech API can fire
+  // interim results many times per second, and translating every single tick floods
+  // the free translation endpoints until they start rate-limiting the whole session.
+  const INTERIM_DISPATCH_INTERVAL_MS = 400;
+
+  const runTranslationQueue = () => {
     if (isTranslatingRef.current) return;
 
     const processQueue = async () => {
       isTranslatingRef.current = true;
+      lastDispatchTimeRef.current = Date.now();
       while (queuedTextRef.current && queuedTextRef.current !== lastTranslatedTextRef.current) {
         const textToTranslate = queuedTextRef.current;
         try {
@@ -278,6 +285,23 @@ export const App: React.FC = () => {
     };
 
     processQueue();
+  };
+
+  const triggerStreamingTranslation = (text: string) => {
+    queuedTextRef.current = text;
+    if (isTranslatingRef.current) return;
+
+    const elapsed = Date.now() - lastDispatchTimeRef.current;
+    if (elapsed >= INTERIM_DISPATCH_INTERVAL_MS) {
+      runTranslationQueue();
+      return;
+    }
+
+    if (pendingDispatchTimerRef.current) return;
+    pendingDispatchTimerRef.current = setTimeout(() => {
+      pendingDispatchTimerRef.current = null;
+      runTranslationQueue();
+    }, INTERIM_DISPATCH_INTERVAL_MS - elapsed);
   };
 
   // Handle Interim (Word-by-word streaming)

@@ -4,6 +4,36 @@ import { TerminologyRule } from '../types/settings';
 const translationCache = new Map<string, string>();
 
 /**
+ * Simple circuit breaker: once a free/public endpoint fails repeatedly (e.g. rate-limited
+ * after heavy word-by-word streaming traffic), stop hammering it for a cooldown window so
+ * it has a chance to recover and we fall through to the next fallback faster.
+ */
+const CIRCUIT_FAILURE_THRESHOLD = 3;
+const CIRCUIT_COOLDOWN_MS = 20000;
+const circuitState: Record<string, { failStreak: number; cooldownUntil: number }> = {
+  clients5: { failStreak: 0, cooldownUntil: 0 },
+  mymemory: { failStreak: 0, cooldownUntil: 0 },
+};
+
+function isCircuitOpen(name: string): boolean {
+  return Date.now() < circuitState[name].cooldownUntil;
+}
+
+function recordCircuitSuccess(name: string) {
+  circuitState[name].failStreak = 0;
+  circuitState[name].cooldownUntil = 0;
+}
+
+function recordCircuitFailure(name: string) {
+  const state = circuitState[name];
+  state.failStreak += 1;
+  if (state.failStreak >= CIRCUIT_FAILURE_THRESHOLD) {
+    state.cooldownUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+    state.failStreak = 0;
+  }
+}
+
+/**
  * Apply custom terminology replacements
  */
 export function applyTerminology(text: string, terms: TerminologyRule[]): string {
@@ -151,24 +181,31 @@ export async function translateEnglishToThai(
 
   // 2. Primary Fast Engine: Google Chrome Extension endpoint (clients5)
   // Has 'Access-Control-Allow-Origin: *' so it works directly in browser on GitHub Pages!
-  try {
-    const c5Url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=th&q=${encodeURIComponent(cleanText)}`;
-    const c5Res = await fetch(c5Url);
-    if (c5Res.ok) {
-      const c5Data: any = await c5Res.json();
-      if (Array.isArray(c5Data) && c5Data[0]) {
-        let result = typeof c5Data[0] === 'string' ? c5Data[0] : (Array.isArray(c5Data[0]) ? c5Data[0].join('') : '');
-        if (result) {
-          if (options?.customTerms) {
-            result = applyTerminology(result, options.customTerms);
+  if (!isCircuitOpen('clients5')) {
+    try {
+      const c5Url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=th&q=${encodeURIComponent(cleanText)}`;
+      const c5Res = await fetch(c5Url);
+      if (c5Res.ok) {
+        const c5Data: any = await c5Res.json();
+        if (Array.isArray(c5Data) && c5Data[0]) {
+          let result = typeof c5Data[0] === 'string' ? c5Data[0] : (Array.isArray(c5Data[0]) ? c5Data[0].join('') : '');
+          if (result) {
+            recordCircuitSuccess('clients5');
+            if (options?.customTerms) {
+              result = applyTerminology(result, options.customTerms);
+            }
+            translationCache.set(cacheKey, result);
+            return result;
           }
-          translationCache.set(cacheKey, result);
-          return result;
         }
+        recordCircuitFailure('clients5');
+      } else {
+        recordCircuitFailure('clients5');
       }
+    } catch (c5Err) {
+      recordCircuitFailure('clients5');
+      console.warn("Direct clients5 translation failed, trying local proxy fallback:", c5Err);
     }
-  } catch (c5Err) {
-    console.warn("Direct clients5 translation failed, trying local proxy fallback:", c5Err);
   }
 
   // 3. Fallback: Local Vite / Backend Server Proxy (/api/translate for local dev)
@@ -207,33 +244,41 @@ export async function translateEnglishToThai(
   }
 
   // 3. Fallback to MyMemory Public API
-  try {
-    const safeText = cleanText.length > 350 ? cleanText.slice(0, 350) : cleanText;
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(safeText)}&langpair=en|th`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.responseData?.translatedText) {
-        let result = data.responseData.translatedText;
-        // Never return MyMemory error messages to user!
-        if (
-          result.includes('QUERY LENGTH') ||
-          result.includes('LIMIT EXCEEDED') ||
-          result.includes('MYMEMORY') ||
-          result.includes('<html') ||
-          result.includes('INVALID TARGET')
-        ) {
-          return '';
+  if (!isCircuitOpen('mymemory')) {
+    try {
+      const safeText = cleanText.length > 350 ? cleanText.slice(0, 350) : cleanText;
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(safeText)}&langpair=en|th`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.responseData?.translatedText) {
+          let result = data.responseData.translatedText;
+          // Never return MyMemory error messages to user!
+          if (
+            result.includes('QUERY LENGTH') ||
+            result.includes('LIMIT EXCEEDED') ||
+            result.includes('MYMEMORY') ||
+            result.includes('<html') ||
+            result.includes('INVALID TARGET')
+          ) {
+            recordCircuitFailure('mymemory');
+            return '';
+          }
+          recordCircuitSuccess('mymemory');
+          if (options?.customTerms) {
+            result = applyTerminology(result, options.customTerms);
+          }
+          translationCache.set(cacheKey, result);
+          return result;
         }
-        if (options?.customTerms) {
-          result = applyTerminology(result, options.customTerms);
-        }
-        translationCache.set(cacheKey, result);
-        return result;
+        recordCircuitFailure('mymemory');
+      } else {
+        recordCircuitFailure('mymemory');
       }
+    } catch (err2) {
+      recordCircuitFailure('mymemory');
+      console.warn("MyMemory fallback failed:", err2);
     }
-  } catch (err2) {
-    console.warn("MyMemory fallback failed:", err2);
   }
 
   // 4. Return empty string if translation could not be reached (never show raw English as Thai)
