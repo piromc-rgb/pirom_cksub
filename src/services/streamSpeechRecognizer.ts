@@ -52,16 +52,7 @@ export class StreamSpeechRecognizer {
       this.audioContext = new AudioCtx();
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
 
-      // 1. Audio Pass-Through: Ensure sound continues playing into the user's headphones!
-      if (this.options.enablePassThrough !== false) {
-        try {
-          this.sourceNode.connect(this.audioContext.destination);
-        } catch (e) {
-          console.warn('Audio pass-through error:', e);
-        }
-      }
-
-      // 2. Analyser for Voice Activity Detection (VAD)
+      // Analyser for Voice Activity Detection (VAD) - do not connect to destination to avoid echo!
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 1024;
       this.sourceNode.connect(this.analyser);

@@ -90,7 +90,6 @@ export const App: React.FC = () => {
   const streamSpeechRecognizerRef = useRef<StreamSpeechRecognizer | null>(null);
   const speakerDiarizerRef = useRef<SpeakerDiarizer | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
-  const audioPassThroughContextRef = useRef<AudioContext | null>(null);
   const pipManagerRef = useRef<SubtitlePiPManager | null>(null);
   const interimTimeoutRef = useRef<any>(null);
   const meetingStartTimeRef = useRef<number>(Date.now());
@@ -371,13 +370,6 @@ export const App: React.FC = () => {
       streamSpeechRecognizerRef.current?.stop();
       speakerDiarizerRef.current?.stop();
 
-      if (audioPassThroughContextRef.current) {
-        try {
-          audioPassThroughContextRef.current.close();
-        } catch (e) {}
-        audioPassThroughContextRef.current = null;
-      }
-
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach((t) => t.stop());
         audioStreamRef.current = null;
@@ -408,26 +400,16 @@ export const App: React.FC = () => {
               return;
             }
 
-            // Audio Pass-Through: Route sound to headphones so user can hear normally
-            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-            if (AudioCtx) {
-              const passThroughCtx = new AudioCtx();
-              audioPassThroughContextRef.current = passThroughCtx;
-              const source = passThroughCtx.createMediaStreamSource(displayStream);
-              source.connect(passThroughCtx.destination);
-            }
-
             audioStreamRef.current = displayStream;
 
-            // Start Diarizer with digital tab stream
+            // Start Diarizer with digital tab stream (analyser only, no destination connection)
             speakerDiarizerRef.current?.start(displayStream);
 
             // Transcribe:
             if (settings.geminiApiKey || settings.openaiApiKey) {
-              // Direct digital stream transcription (ideal for headphones!)
               streamSpeechRecognizerRef.current?.start(displayStream);
             } else {
-              // Web Speech API fallback (if using BlackHole / Stereo Mix)
+              // Web Speech API listens to mic (without any audio loopback echo!)
               speechRecognizerRef.current?.start();
             }
 
@@ -440,7 +422,13 @@ export const App: React.FC = () => {
         // Direct Microphone mode
         try {
           if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+              },
+            });
             audioStreamRef.current = stream;
             speakerDiarizerRef.current?.start(stream);
           }
