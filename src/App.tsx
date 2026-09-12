@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { 
   Header 
 } from './components/Header';
@@ -31,7 +32,11 @@ import { SubtitleSegment, AudioInputMode, SpeakerProfile, SpeakerColor, DEFAULT_
 import { AppSettings, DEFAULT_SETTINGS } from './types/settings';
 import { MeetingSpeechRecognizer } from './services/speechRecognition';
 import { DeepgramNova3Recognizer } from './services/deepgramNova3';
-import { translateEnglishToThai } from './services/translationService';
+import {
+  translateEnglishToThai,
+  isFreeTranslationRateLimited,
+  getFreeTranslationCooldownRemainingMs,
+} from './services/translationService';
 import { SubtitlePiPManager } from './services/pipManager';
 import { SpeakerDiarizer } from './services/speakerDiarizer';
 
@@ -98,6 +103,8 @@ export const App: React.FC = () => {
   const lastFinalTimeRef = useRef<number>(0);
   const lastDispatchTimeRef = useRef<number>(0);
   const pendingDispatchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isTranslationRateLimited, setIsTranslationRateLimited] = useState(false);
+  const rateLimitClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Save settings
   const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
@@ -155,6 +162,14 @@ export const App: React.FC = () => {
       pipManagerRef.current.updateSubtitle(latest);
     }
   }, [currentInterim, subtitles]);
+
+  // Clean up pending translation timers on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingDispatchTimerRef.current) clearTimeout(pendingDispatchTimerRef.current);
+      if (rateLimitClearTimerRef.current) clearTimeout(rateLimitClearTimerRef.current);
+    };
+  }, []);
 
   // Initialize Speech Recognizer
   useEffect(() => {
@@ -244,6 +259,24 @@ export const App: React.FC = () => {
     );
   };
 
+  // Surface it on screen when the free translation endpoints are rate-limited, and
+  // auto-clear the notice once their cooldown window has passed.
+  const refreshTranslationHealthStatus = () => {
+    const limited = isFreeTranslationRateLimited();
+    setIsTranslationRateLimited(limited);
+
+    if (rateLimitClearTimerRef.current) {
+      clearTimeout(rateLimitClearTimerRef.current);
+      rateLimitClearTimerRef.current = null;
+    }
+    if (limited) {
+      const remaining = getFreeTranslationCooldownRemainingMs();
+      rateLimitClearTimerRef.current = setTimeout(() => {
+        setIsTranslationRateLimited(isFreeTranslationRateLimited());
+      }, remaining + 250);
+    }
+  };
+
   // Real-time continuous streaming translation pipeline
   // Throttled to a minimum interval between dispatches: the Web Speech API can fire
   // interim results many times per second, and translating every single tick floods
@@ -279,6 +312,8 @@ export const App: React.FC = () => {
         } catch (err) {
           console.warn('Streaming translation caught error:', err);
           lastTranslatedTextRef.current = textToTranslate;
+        } finally {
+          refreshTranslationHealthStatus();
         }
       }
       isTranslatingRef.current = false;
@@ -462,7 +497,8 @@ export const App: React.FC = () => {
           prev.map((s) => (s.id === segmentId ? { ...s, thaiText: refinedThai.trim() } : s))
         );
       }
-    }).catch(() => {});
+    }).catch(() => {})
+      .finally(() => refreshTranslationHealthStatus());
   };
 
   // Toggle listening
@@ -625,6 +661,19 @@ export const App: React.FC = () => {
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
       />
+
+      {/* Translation Rate-Limit Notice */}
+      {isTranslationRateLimited && (
+        <div className="w-full bg-amber-500/10 border-b border-amber-500/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2 text-amber-300 text-xs sm:text-sm">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              บริการแปลภาษาฟรีถูกจำกัดการใช้งานชั่วคราว (rate limit) คำบรรยายอาจไม่ถูกแปลชั่วขณะ
+              ระบบจะลองใหม่โดยอัตโนมัติภายในไม่กี่วินาที
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Main Workspace Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-4">

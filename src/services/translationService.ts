@@ -34,6 +34,22 @@ function recordCircuitFailure(name: string) {
 }
 
 /**
+ * True when both free translation endpoints are currently cooling down, meaning
+ * translation is effectively unavailable until at least one of them recovers.
+ * The UI can poll this to warn the user instead of leaving them guessing why
+ * subtitles stopped getting translated.
+ */
+export function isFreeTranslationRateLimited(): boolean {
+  return isCircuitOpen('clients5') && isCircuitOpen('mymemory');
+}
+
+/** Milliseconds until the soonest-recovering free endpoint comes back out of cooldown. */
+export function getFreeTranslationCooldownRemainingMs(): number {
+  const soonest = Math.min(circuitState.clients5.cooldownUntil, circuitState.mymemory.cooldownUntil);
+  return Math.max(0, soonest - Date.now());
+}
+
+/**
  * Apply custom terminology replacements
  */
 export function applyTerminology(text: string, terms: TerminologyRule[]): string {
