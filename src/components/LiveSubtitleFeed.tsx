@@ -26,13 +26,14 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
   speakers = [],
   onReassignSpeaker,
 }) => {
-  const feedEndRef = useRef<HTMLDivElement>(null);
+  const feedContainerRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Auto scroll effect
+  // Newest subtitle is rendered at the top of the feed, so keep the view pinned
+  // to the top as new lines arrive instead of scrolling down to a bottom anchor.
   useEffect(() => {
-    if (settings.autoScroll && feedEndRef.current) {
-      feedEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (settings.autoScroll && feedContainerRef.current) {
+      feedContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [subtitles, currentInterim, settings.autoScroll]);
 
@@ -124,7 +125,8 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
       </div>
 
       {/* Main Stream Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-[380px] max-h-[600px]">
+      {/* Newest first: current interim on top, then confirmed subtitles newest-to-oldest below */}
+      <div ref={feedContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-[380px] max-h-[600px]">
         {/* Empty State */}
         {subtitles.length === 0 && !currentInterim && (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400 space-y-4">
@@ -156,28 +158,26 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
           </div>
         )}
 
-        {/* Existing Confirmed Subtitles */}
-        {filteredSubtitles.map((segment) => (
-          <SubtitleItem 
-            key={segment.id} 
-            segment={segment} 
-            settings={settings}
-            speakers={speakers}
-            onReassignSpeaker={onReassignSpeaker}
-          />
-        ))}
-
-        {/* Current Active Interim Segment */}
+        {/* Current Active Interim Segment (newest, still being spoken) */}
         {currentInterim && (
-          <SubtitleItem 
-            key="interim-active" 
-            segment={currentInterim} 
+          <SubtitleItem
+            key="interim-active"
+            segment={currentInterim}
             settings={settings}
             speakers={speakers}
           />
         )}
 
-        <div ref={feedEndRef} />
+        {/* Confirmed Subtitles, newest first */}
+        {[...filteredSubtitles].reverse().map((segment) => (
+          <SubtitleItem
+            key={segment.id}
+            segment={segment}
+            settings={settings}
+            speakers={speakers}
+            onReassignSpeaker={onReassignSpeaker}
+          />
+        ))}
       </div>
     </div>
   );
