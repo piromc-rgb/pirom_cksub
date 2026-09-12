@@ -13,6 +13,7 @@ export class DeepgramNova3Recognizer {
   private handlers: DeepgramHandlers;
   private isCurrentlyListening: boolean = false;
   private isManuallyStopped: boolean = false;
+  private lastFinalTranscript: string = '';
 
   constructor(apiKey: string, stream: MediaStream, handlers: DeepgramHandlers) {
     this.apiKey = apiKey.trim();
@@ -31,6 +32,7 @@ export class DeepgramNova3Recognizer {
     }
 
     this.isManuallyStopped = false;
+    this.lastFinalTranscript = '';
     this.initWebSocket();
   }
 
@@ -141,11 +143,15 @@ export class DeepgramNova3Recognizer {
           speakerId = `spk_${alt.words[0].speaker + 1}`;
         }
 
-        if (transcript.trim()) {
+        const cleanTranscript = transcript.trim();
+        if (cleanTranscript) {
           if (data.is_final) {
-            this.handlers.onFinal(transcript.trim(), confidence, speakerId);
+            if (cleanTranscript !== this.lastFinalTranscript) {
+              this.lastFinalTranscript = cleanTranscript;
+              this.handlers.onFinal(cleanTranscript, confidence, speakerId);
+            }
           } else {
-            this.handlers.onInterim(transcript.trim(), speakerId);
+            this.handlers.onInterim(cleanTranscript, speakerId);
           }
         }
       }

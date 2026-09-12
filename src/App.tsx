@@ -94,6 +94,8 @@ export const App: React.FC = () => {
   const isTranslatingRef = useRef<boolean>(false);
   const queuedTextRef = useRef<string>('');
   const lastTranslatedTextRef = useRef<string>('');
+  const lastFinalTextRef = useRef<string>('');
+  const lastFinalTimeRef = useRef<number>(0);
 
   // Save settings
   const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
@@ -334,6 +336,22 @@ export const App: React.FC = () => {
     const clean = englishText.trim();
     if (!clean) return;
 
+    const normalize = (s: string) => s.replace(/[.,/#!$%^&*;:{}=\-_`~()?'"]/g, '').trim().toLowerCase();
+    const normClean = normalize(clean);
+
+    // Guard against duplicate final speech calls within a short time window
+    const nowMs = Date.now();
+    if (
+      normalize(lastFinalTextRef.current) === normClean &&
+      nowMs - lastFinalTimeRef.current < 4000
+    ) {
+      console.warn('Duplicate final speech skipped:', clean);
+      return;
+    }
+
+    lastFinalTextRef.current = clean;
+    lastFinalTimeRef.current = nowMs;
+
     if (speakerId && autoDiarize) {
       if (activeSpeakerId !== speakerId) {
         setActiveSpeakerId(speakerId);
@@ -365,12 +383,18 @@ export const App: React.FC = () => {
       confidence,
     };
 
-    // 1. Immediately commit new finalized segment to subtitles list
-    setSubtitles((prev) => [...prev, newSegment]);
+    // 1. Immediately commit new finalized segment to subtitles list (with consecutive duplicate protection)
+    setSubtitles((prev) => {
+      if (prev.length > 0) {
+        const last = prev[prev.length - 1];
+        if (normalize(last.englishText) === normClean) {
+          return prev;
+        }
+      }
+      return [...prev, newSegment];
+    });
 
     // 2. Clear or adjust interim without rollback or ghosting
-    const normalize = (s: string) => s.replace(/[.,/#!$%^&*;:{}=\-_`~()?'"]/g, '').trim().toLowerCase();
-    const normClean = normalize(clean);
 
     setCurrentInterim((prev) => {
       if (!prev) return null;

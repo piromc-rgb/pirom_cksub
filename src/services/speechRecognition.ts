@@ -20,6 +20,9 @@ export class MeetingSpeechRecognizer {
   private handlers: SpeechRecognitionHandlers;
   private lang = 'en-US';
 
+  private processedFinalIndex = -1;
+  private lastFinalText = '';
+
   constructor(handlers: SpeechRecognitionHandlers, lang = 'en-US') {
     this.handlers = handlers;
     this.lang = lang;
@@ -45,6 +48,8 @@ export class MeetingSpeechRecognizer {
 
     this.recognition.onstart = () => {
       this.isCurrentlyListening = true;
+      this.processedFinalIndex = -1;
+      this.lastFinalText = '';
       this.handlers.onStatusChange(true);
     };
 
@@ -60,17 +65,23 @@ export class MeetingSpeechRecognizer {
         const item = event.results[i];
         const text = item[0]?.transcript || '';
         if (item.isFinal) {
-          finalTranscript = finalTranscript ? `${finalTranscript} ${text.trim()}` : text.trim();
-          if (item[0]?.confidence) confidence = item[0].confidence;
+          // CRITICAL: Only process each result index ONCE as final!
+          if (i > this.processedFinalIndex) {
+            this.processedFinalIndex = i;
+            finalTranscript = finalTranscript ? `${finalTranscript} ${text.trim()}` : text.trim();
+            if (item[0]?.confidence) confidence = item[0].confidence;
+          }
         } else {
-          interimTranscript = interimTranscript ? `${interimTranscript} ${text.trim()}` : text.trim();
+          interimTranscript += (interimTranscript ? ' ' : '') + text.trim();
         }
       }
 
       // CRITICAL: Process finalized chunk FIRST so it doesn't wipe subsequent interim
-      if (finalTranscript.trim()) {
+      const cleanFinal = finalTranscript.trim();
+      if (cleanFinal && cleanFinal !== this.lastFinalText) {
+        this.lastFinalText = cleanFinal;
         lastInterimText = '';
-        this.handlers.onFinal(finalTranscript.trim(), confidence);
+        this.handlers.onFinal(cleanFinal, confidence);
       }
 
       // Then process any new interim for the next sentence
@@ -99,8 +110,9 @@ export class MeetingSpeechRecognizer {
       this.handlers.onStatusChange(false);
 
       // CRITICAL: Flush any unfinalized interim speech so trailing words are NEVER lost on cut!
-      if (lastInterimText.trim()) {
-        const flushText = lastInterimText.trim();
+      const flushText = lastInterimText.trim();
+      if (flushText && flushText !== this.lastFinalText) {
+        this.lastFinalText = flushText;
         lastInterimText = '';
         this.handlers.onFinal(flushText, lastInterimConfidence);
       }
