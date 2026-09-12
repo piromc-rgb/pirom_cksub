@@ -88,8 +88,10 @@ export const App: React.FC = () => {
   const interimTimeoutRef = useRef<any>(null);
   const meetingStartTimeRef = useRef<number>(Date.now());
   const interimThaiRef = useRef<string>('');
-  const interimReqIdRef = useRef<number>(0);
   const latestInterimEnglishRef = useRef<string>('');
+  const isTranslatingRef = useRef<boolean>(false);
+  const queuedTextRef = useRef<string>('');
+  const lastTranslatedTextRef = useRef<string>('');
 
   // Save settings
   const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
@@ -235,8 +237,81 @@ export const App: React.FC = () => {
     );
   };
 
+  // Real-time continuous streaming translation pipeline
+  const triggerStreamingTranslation = (text: string) => {
+    queuedTextRef.current = text;
+    if (isTranslatingRef.current) return;
+
+    const processQueue = async () => {
+      isTranslatingRef.current = true;
+      while (queuedTextRef.current && queuedTextRef.current !== lastTranslatedTextRef.current) {
+        const textToTranslate = queuedTextRef.current;
+        try {
+          const th = await translateEnglishToThai(textToTranslate, {
+            engine: settings.translationEngine,
+            geminiKey: settings.geminiApiKey,
+            openaiKey: settings.openaiApiKey,
+            customTerms: settings.customTerms,
+          });
+
+          if (th && th.trim()) {
+            lastTranslatedTextRef.current = textToTranslate;
+            interimThaiRef.current = th.trim();
+            setCurrentInterim((prev) => {
+              if (!prev) return null;
+              return { ...prev, thaiText: th.trim() };
+            });
+          } else {
+            lastTranslatedTextRef.current = textToTranslate;
+          }
+        } catch (err) {
+          console.warn('Streaming translation caught error:', err);
+          lastTranslatedTextRef.current = textToTranslate;
+        }
+      }
+      isTranslatingRef.current = false;
+    };
+
+    processQueue();
+  };
+
   // Handle Interim (Word-by-word streaming)
-  const handleInterimSpeech = (englishText: string) => {
+  const handleInterimSpeech = (rawEnglishText: string) => {
+    let englishText = rawEnglishText.trim();
+    if (!englishText) return;
+
+    // Natural Clause Segmentation for long continuous speech
+    // When interim stream reaches >= 20 words with natural clause transitions, commit the completed clause!
+    const words = englishText.split(/\s+/);
+    if (words.length >= 20) {
+      let breakIndex = -1;
+      for (let i = 12; i < words.length - 4; i++) {
+        const w = words[i].toLowerCase();
+        const nextW = words[i + 1]?.toLowerCase() || '';
+        if (
+          (w === 'and' && (nextW === 'also' || nextW === 'then' || nextW === 'to' || nextW === 'duplicate' || nextW === 'have' || nextW === 'make')) ||
+          (w === 'but' && (nextW === 'also' || nextW === 'to' || nextW === 'we')) ||
+          w === 'so' ||
+          w === 'because' ||
+          w === 'however' ||
+          w.endsWith('.') ||
+          w.endsWith('?') ||
+          w.endsWith('!') ||
+          w.endsWith(',')
+        ) {
+          breakIndex = i;
+          break;
+        }
+      }
+
+      if (breakIndex !== -1) {
+        const finalizedClause = words.slice(0, breakIndex).join(' ');
+        const remainingClause = words.slice(breakIndex).join(' ');
+        handleFinalSpeech(finalizedClause, 0.95);
+        englishText = remainingClause;
+      }
+    }
+
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
 
@@ -257,27 +332,8 @@ export const App: React.FC = () => {
 
     setCurrentInterim(interimObj);
 
-    if (interimTimeoutRef.current) {
-      clearTimeout(interimTimeoutRef.current);
-    }
-
-    const reqId = ++interimReqIdRef.current;
-
-    interimTimeoutRef.current = setTimeout(async () => {
-      const th = await translateEnglishToThai(englishText, {
-        engine: settings.translationEngine,
-        geminiKey: settings.geminiApiKey,
-        openaiKey: settings.openaiApiKey,
-        customTerms: settings.customTerms,
-      });
-
-      if (reqId !== interimReqIdRef.current) return;
-
-      if (th && th.trim()) {
-        interimThaiRef.current = th.trim();
-        setCurrentInterim((prev) => (prev ? { ...prev, thaiText: th.trim() } : null));
-      }
-    }, 220);
+    // Trigger instant continuous streaming translation
+    triggerStreamingTranslation(englishText);
   };
 
   // Handle Confirmed Sentence Finalization
@@ -288,7 +344,6 @@ export const App: React.FC = () => {
     if (interimTimeoutRef.current) {
       clearTimeout(interimTimeoutRef.current);
     }
-    interimReqIdRef.current++;
 
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
@@ -326,6 +381,8 @@ export const App: React.FC = () => {
     if (latestInterimEnglishRef.current === clean) {
       latestInterimEnglishRef.current = '';
       interimThaiRef.current = '';
+      queuedTextRef.current = '';
+      lastTranslatedTextRef.current = '';
     }
 
     // 3. In background: refine the Thai translation if needed (without freezing the UI)
