@@ -19,6 +19,7 @@ interface MeetingControlsProps {
   onClearTranscript: () => void;
   subtitleCount: number;
   activeSpeaker?: string;
+  sttEngine?: 'web-speech' | 'deepgram-nova3';
 }
 
 export const MeetingControls: React.FC<MeetingControlsProps> = ({
@@ -29,6 +30,7 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
   onClearTranscript,
   subtitleCount,
   activeSpeaker,
+  sttEngine = 'web-speech',
 }) => {
   return (
     <div className="w-full bg-[#0d121e]/90 border border-slate-800/80 rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 shadow-xl shadow-black/40 backdrop-blur-md">
@@ -109,10 +111,17 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
 
         {/* Right: Latency & Clear */}
         <div className="flex items-center gap-2.5 shrink-0 whitespace-nowrap">
+          {sttEngine === 'deepgram-nova3' && (
+            <div className="hidden lg:flex items-center gap-1.5 text-xs bg-indigo-500/15 text-cyan-300 border border-indigo-500/30 px-2.5 py-1.5 rounded-lg shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="font-semibold tracking-wide">Deepgram Nova-3</span>
+            </div>
+          )}
+
           <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
             <Zap className="w-3.5 h-3.5 text-cyan-400" />
             <span>Latency: </span>
-            <span className="text-cyan-300 font-mono font-medium">&lt; 380ms</span>
+            <span className="text-cyan-300 font-mono font-medium">&lt; 280ms</span>
           </div>
 
           {subtitleCount > 0 && (
