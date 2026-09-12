@@ -25,3 +25,6 @@ vite.config.js
 *.njsproj
 *.sln
 *.sw?
+
+# Local dev tooling config
+.claude/

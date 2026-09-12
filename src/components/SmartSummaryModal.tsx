@@ -1,27 +1,25 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  X, 
-  Sparkles, 
-  CheckCircle2, 
-  ListTodo, 
-  Check, 
-  Copy, 
-  Download, 
-  FileText, 
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  Sparkles,
+  CheckCircle2,
+  ListTodo,
+  Check,
+  Copy,
+  Download,
+  FileText,
   Loader2,
   RotateCw
 } from 'lucide-react';
-import { SubtitleSegment, SpeakerProfile } from '../types/subtitle';
+import { SubtitleSegment } from '../types/subtitle';
 import { AppSettings } from '../types/settings';
 import { generateMeetingSummary } from '../services/translationService';
-import { getSpeakerBadgeClasses } from './SpeakerBar';
 
 interface SmartSummaryModalProps {
   isOpen: boolean;
   onClose: () => void;
   subtitles: SubtitleSegment[];
   settings: AppSettings;
-  speakers?: SpeakerProfile[];
 }
 
 export const SmartSummaryModal: React.FC<SmartSummaryModalProps> = ({
@@ -29,7 +27,6 @@ export const SmartSummaryModal: React.FC<SmartSummaryModalProps> = ({
   onClose,
   subtitles,
   settings,
-  speakers = [],
 }) => {
   const [loading, setLoading] = useState(false);
   const [summaryData, setSummaryData] = useState<{
@@ -39,33 +36,6 @@ export const SmartSummaryModal: React.FC<SmartSummaryModalProps> = ({
     decisions: string[];
   } | null>(null);
   const [copied, setCopied] = useState(false);
-
-  // Calculate speaker statistics - always executed at top level
-  const speakerStats = useMemo(() => {
-    const total = subtitles.length;
-    if (total === 0) return [];
-
-    const countMap: Record<string, { name: string; count: number; speakerId?: string }> = {};
-    for (const sub of subtitles) {
-      const spkName = sub.speaker || 'Unknown';
-      if (!countMap[spkName]) {
-        countMap[spkName] = { name: spkName, count: 0, speakerId: sub.speakerId };
-      }
-      countMap[spkName].count++;
-    }
-
-    return Object.values(countMap)
-      .map((item) => {
-        const percent = Math.round((item.count / total) * 100);
-        const matched = speakers.find((s) => s.id === item.speakerId || s.name === item.name);
-        return {
-          ...item,
-          percent,
-          color: matched?.color || 'cyan',
-        };
-      })
-      .sort((a, b) => b.count - a.count);
-  }, [subtitles, speakers]);
 
   const handleGenerate = async () => {
     if (subtitles.length === 0) return;
@@ -93,18 +63,9 @@ export const SmartSummaryModal: React.FC<SmartSummaryModalProps> = ({
   const getMarkdownSummary = () => {
     if (!summaryData) return '';
 
-    const speakerSection =
-      speakerStats.length > 0
-        ? `\n## สถิติการมีส่วนร่วมของผู้พูด (Speaker Participation)\n` +
-          speakerStats
-            .map((s) => `- **${s.name}**: ${s.count} ประโยค (${s.percent}%)`)
-            .join('\n') +
-          '\n'
-        : '';
-
     return `# 📋 สรุปการประชุมอัจฉริยะ (CHAKEN Sub AI Meeting Minutes)
 วันที่: ${new Date().toLocaleDateString('th-TH')} | จำนวนข้อความ: ${subtitles.length} ประโยค
-${speakerSection}
+
 ## 1. บทสรุปผู้บริหาร (Executive Summary)
 ${summaryData.executiveSummary}
 
@@ -193,38 +154,6 @@ ${summaryData.decisions.map(d => `- ✅ ${d}`).join('\n')}
             </div>
           ) : summaryData ? (
             <div className="space-y-6">
-              {/* Speaker Participation Stats */}
-              {speakerStats.length > 0 && (
-                <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 sm:p-5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-3 flex items-center gap-1.5">
-                    <span>👥 สัดส่วนการพูดคุยของผู้ร่วมประชุม (Speaker Participation)</span>
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {speakerStats.map((spk, idx) => {
-                      const badgeClass = getSpeakerBadgeClasses(spk.color);
-                      return (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-2.5 bg-slate-950/70 border border-slate-800/80 rounded-xl text-xs"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded-full border font-medium ${badgeClass}`}>
-                              🎙️ {spk.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 font-mono">
-                            <span className="text-slate-400">{spk.count} ประโยค</span>
-                            <span className="font-semibold text-white bg-slate-800 px-2 py-0.5 rounded-md">
-                              {spk.percent}%
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Executive Summary */}
               <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 sm:p-5">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-2 flex items-center gap-1.5">

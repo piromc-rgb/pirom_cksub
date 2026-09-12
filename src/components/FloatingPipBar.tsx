@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { ExternalLink, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { SubtitleSegment, SpeakerProfile } from '../types/subtitle';
+import { SubtitleSegment } from '../types/subtitle';
 import { AppSettings } from '../types/settings';
-import { getSpeakerBadgeClasses } from './SpeakerBar';
 
 interface FloatingPipBarProps {
   currentSubtitle: SubtitleSegment | null;
   settings: AppSettings;
-  speakers?: SpeakerProfile[];
   onRequestNativePip: () => void;
   isNativePipActive: boolean;
 }
@@ -15,7 +13,6 @@ interface FloatingPipBarProps {
 export const FloatingPipBar: React.FC<FloatingPipBarProps> = ({
   currentSubtitle,
   settings,
-  speakers = [],
   onRequestNativePip,
   isNativePipActive,
 }) => {
@@ -34,11 +31,6 @@ export const FloatingPipBar: React.FC<FloatingPipBarProps> = ({
       </button>
     );
   }
-
-  const matchedSpeaker = speakers.find(
-    (s) => s.id === currentSubtitle?.speakerId || s.name === currentSubtitle?.speaker
-  );
-  const speakerBadgeClass = getSpeakerBadgeClasses(matchedSpeaker?.color);
 
   const thaiColorClass = {
     cyan: 'text-cyan-300',
@@ -64,11 +56,6 @@ export const FloatingPipBar: React.FC<FloatingPipBarProps> = ({
           <div className="flex items-center gap-2 text-slate-300">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
             <span className="font-semibold text-white">CHAKEN Sub</span>
-            {currentSubtitle && settings.showSpeaker && (
-              <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${speakerBadgeClass}`}>
-                🎙️ {currentSubtitle.speaker}
-              </span>
-            )}
           </div>
 
           <div className="flex items-center gap-1.5">

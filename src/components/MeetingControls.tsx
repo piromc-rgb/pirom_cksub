@@ -18,7 +18,6 @@ interface MeetingControlsProps {
   onChangeAudioMode: (mode: AudioInputMode) => void;
   onClearTranscript: () => void;
   subtitleCount: number;
-  activeSpeaker?: string;
 }
 
 export const MeetingControls: React.FC<MeetingControlsProps> = ({
@@ -28,7 +27,6 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
   onChangeAudioMode,
   onClearTranscript,
   subtitleCount,
-  activeSpeaker,
 }) => {
   return (
     <div className="w-full bg-[#0d121e]/90 border border-slate-800/80 rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 shadow-xl shadow-black/40 backdrop-blur-md">
@@ -71,11 +69,6 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
                   {isListening ? 'กำลังดักฟังเสียง (Live)' : 'พร้อมทำงาน (Standby)'}
                 </span>
               </div>
-              {isListening && activeSpeaker && (
-                <p className="text-[10px] text-slate-400 truncate max-w-[100px]">
-                  🎙️ {activeSpeaker}
-                </p>
-              )}
             </div>
           </div>
         </div>

@@ -39,8 +39,20 @@ const translateHandler = async (req: any, res: any) => {
       const c5Res = await fetch(c5Url);
       if (c5Res.ok) {
         const c5Data: any = await c5Res.json();
-        if (Array.isArray(c5Data) && c5Data[0]) {
-          translated = typeof c5Data[0] === 'string' ? c5Data[0] : (Array.isArray(c5Data[0]) ? c5Data[0].join('') : '');
+        if (Array.isArray(c5Data) && c5Data.length > 0) {
+          if (typeof c5Data[0] === 'string') {
+            translated = c5Data.filter((s: any) => typeof s === 'string' && s.trim()).join(' ').trim();
+          } else if (Array.isArray(c5Data[0])) {
+            translated = c5Data[0]
+              .map((item: any) => {
+                if (typeof item === 'string') return item;
+                if (Array.isArray(item) && typeof item[0] === 'string') return item[0];
+                return '';
+              })
+              .filter(Boolean)
+              .join(' ')
+              .trim();
+          }
         }
       }
     } catch (e1) {

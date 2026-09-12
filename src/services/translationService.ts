@@ -203,8 +203,23 @@ export async function translateEnglishToThai(
       const c5Res = await fetch(c5Url);
       if (c5Res.ok) {
         const c5Data: any = await c5Res.json();
-        if (Array.isArray(c5Data) && c5Data[0]) {
-          let result = typeof c5Data[0] === 'string' ? c5Data[0] : (Array.isArray(c5Data[0]) ? c5Data[0].join('') : '');
+        if (Array.isArray(c5Data) && c5Data.length > 0) {
+          let result = '';
+          if (typeof c5Data[0] === 'string') {
+            // Join ALL parts in the array so long sentences are never truncated
+            result = c5Data.filter((s: any) => typeof s === 'string' && s.trim()).join(' ').trim();
+          } else if (Array.isArray(c5Data[0])) {
+            result = c5Data[0]
+              .map((item: any) => {
+                if (typeof item === 'string') return item;
+                if (Array.isArray(item) && typeof item[0] === 'string') return item[0];
+                return '';
+              })
+              .filter(Boolean)
+              .join(' ')
+              .trim();
+          }
+
           if (result) {
             recordCircuitSuccess('clients5');
             if (options?.customTerms) {
@@ -220,8 +235,33 @@ export async function translateEnglishToThai(
       }
     } catch (c5Err) {
       recordCircuitFailure('clients5');
-      console.warn("Direct clients5 translation failed, trying local proxy fallback:", c5Err);
+      console.warn("Direct clients5 translation failed, trying fallback:", c5Err);
     }
+  }
+
+  // 2.5 Secondary Fast Engine: Google GTX endpoint
+  try {
+    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(cleanText)}`;
+    const gtxRes = await fetch(gtxUrl);
+    if (gtxRes.ok) {
+      const gtxData: any = await gtxRes.json();
+      if (Array.isArray(gtxData) && Array.isArray(gtxData[0])) {
+        let result = gtxData[0]
+          .map((item: any) => (Array.isArray(item) && typeof item[0] === 'string' ? item[0] : ''))
+          .filter(Boolean)
+          .join('')
+          .trim();
+        if (result) {
+          if (options?.customTerms) {
+            result = applyTerminology(result, options.customTerms);
+          }
+          translationCache.set(cacheKey, result);
+          return result;
+        }
+      }
+    }
+  } catch (gtxErr) {
+    // Continue to local backend proxy
   }
 
   // 3. Fallback: Local Vite / Backend Server Proxy (/api/translate for local dev)
@@ -305,7 +345,7 @@ export async function translateEnglishToThai(
  * Generate AI Meeting Summary (Minutes) in Thai
  */
 export async function generateMeetingSummary(
-  subtitles: { speaker: string; englishText: string; thaiText: string; timestamp: string }[],
+  subtitles: { englishText: string; thaiText: string; timestamp: string }[],
   options?: { geminiKey?: string }
 ): Promise<{
   executiveSummary: string;
@@ -314,7 +354,7 @@ export async function generateMeetingSummary(
   decisions: string[];
 }> {
   const fullTranscript = subtitles
-    .map(s => `[${s.timestamp}] ${s.speaker}: ${s.englishText} (แปลไทย: ${s.thaiText})`)
+    .map(s => `[${s.timestamp}] ${s.englishText} (แปลไทย: ${s.thaiText})`)
     .join('\n');
 
   if (options?.geminiKey) {
@@ -357,14 +397,13 @@ ${fullTranscript.slice(0, 10000)}
 
   // Heuristic Smart Summary (Works offline and without API Key!)
   const totalSentences = subtitles.length;
-  const speakers = Array.from(new Set(subtitles.map(s => s.speaker)));
 
   return {
-    executiveSummary: `การประชุมมีผู้เข้าร่วมหลัก ${speakers.join(', ')} โดยมีการแลกเปลี่ยนข้อมูลและหารือร่วมกันทั้งหมด ${totalSentences} ประเด็น มีการติดตามความคืบหน้าของโปรเจกต์และวางแผนขั้นตอนการทำงานในระยะถัดไปอย่างครบถ้วน`,
+    executiveSummary: `การประชุมมีการแลกเปลี่ยนข้อมูลและหารือร่วมกันทั้งหมด ${totalSentences} ประเด็น มีการติดตามความคืบหน้าของโปรเจกต์และวางแผนขั้นตอนการทำงานในระยะถัดไปอย่างครบถ้วน`,
     keyPoints: subtitles.slice(0, 4).map(s => s.thaiText || s.englishText),
     actionItems: [
-      { task: "ทบทวนประเด็นและข้อตกลงที่สรุปได้จากการประชุม", owner: speakers[0] || "ทีมงาน", deadline: "ภายในสัปดาห์นี้" },
-      { task: "เตรียมข้อมูลและเอกสารสำหรับรอบการประชุมถัดไป", owner: speakers[1] || "ผู้เกี่ยวข้อง", deadline: "ก่อนเริ่มสปรินต์หน้า" }
+      { task: "ทบทวนประเด็นและข้อตกลงที่สรุปได้จากการประชุม", owner: "ทีมงาน", deadline: "ภายในสัปดาห์นี้" },
+      { task: "เตรียมข้อมูลและเอกสารสำหรับรอบการประชุมถัดไป", owner: "ผู้เกี่ยวข้อง", deadline: "ก่อนเริ่มสปรินต์หน้า" }
     ],
     decisions: [
       "เห็นชอบในทิศทางการดำเนินงานและไทม์ไลน์ที่ได้นำเสนอ",

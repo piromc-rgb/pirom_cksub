@@ -1,13 +1,14 @@
 import React from 'react';
-import { 
-  Sparkles, 
-  Settings, 
-  Share2, 
-  Download, 
-  ExternalLink, 
-  Maximize2, 
+import {
+  Sparkles,
+  Settings,
+  Share2,
+  Download,
+  ExternalLink,
+  Maximize2,
   Minimize2,
-  Tv
+  Tv,
+  Headphones
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -16,6 +17,7 @@ interface HeaderProps {
   onOpenSummary: () => void;
   onOpenShare: () => void;
   onOpenExport: () => void;
+  onOpenHeadphoneGuide: () => void;
   onRequestPip: () => void;
   isPipActive: boolean;
   isFullscreen: boolean;
@@ -28,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSummary,
   onOpenShare,
   onOpenExport,
+  onOpenHeadphoneGuide,
   onRequestPip,
   isPipActive,
   isFullscreen,
@@ -118,6 +121,15 @@ export const Header: React.FC<HeaderProps> = ({
             className="p-2 text-slate-400 hover:text-slate-100 bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/80 rounded-lg transition-colors"
           >
             <Download className="w-4 h-4" />
+          </button>
+
+          {/* Headphone Setup Guide */}
+          <button
+            onClick={onOpenHeadphoneGuide}
+            title="ใช้ Headphone (Setup Guide)"
+            className="p-2 text-slate-400 hover:text-slate-100 bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/80 rounded-lg transition-colors"
+          >
+            <Headphones className="w-4 h-4" />
           </button>
 
           {/* Fullscreen */}

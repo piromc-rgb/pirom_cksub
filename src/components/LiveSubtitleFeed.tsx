@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { 
-  ArrowDown, 
-  Search, 
-  Subtitles, 
+import {
+  ArrowUp,
+  Search,
+  Subtitles,
   Languages
 } from 'lucide-react';
 import { SubtitleSegment } from '../types/subtitle';
@@ -14,8 +14,6 @@ interface LiveSubtitleFeedProps {
   currentInterim: SubtitleSegment | null;
   settings: AppSettings;
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void;
-  speakers?: import('../types/subtitle').SpeakerProfile[];
-  onReassignSpeaker?: (segmentId: string, newSpeaker: import('../types/subtitle').SpeakerProfile) => void;
 }
 
 export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
@@ -23,25 +21,21 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
   currentInterim,
   settings,
   onUpdateSettings,
-  speakers = [],
-  onReassignSpeaker,
 }) => {
-  const feedContainerRef = useRef<HTMLDivElement>(null);
+  const streamRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Newest subtitle is rendered at the top of the feed, so keep the view pinned
-  // to the top as new lines arrive instead of scrolling down to a bottom anchor.
+  // Auto scroll effect: newest subtitle renders on top, so scroll up to reveal it
   useEffect(() => {
-    if (settings.autoScroll && feedContainerRef.current) {
-      feedContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    if (settings.autoScroll && streamRef.current) {
+      streamRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [subtitles, currentInterim, settings.autoScroll]);
 
   // Filter subtitles if search query is active
   const filteredSubtitles = subtitles.filter(s =>
     s.englishText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.thaiText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.speaker.toLowerCase().includes(searchQuery.toLowerCase())
+    s.thaiText.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -119,14 +113,14 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
             }`}
             title={settings.autoScroll ? 'เลื่อนอัตโนมัติ: เปิด' : 'เลื่อนอัตโนมัติ: ปิด'}
           >
-            <ArrowDown className="w-3.5 h-3.5" />
+            <ArrowUp className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       {/* Main Stream Area */}
       {/* Newest first: current interim on top, then confirmed subtitles newest-to-oldest below */}
-      <div ref={feedContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-[380px] max-h-[600px]">
+      <div ref={streamRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-[380px] max-h-[600px]">
         {/* Empty State */}
         {subtitles.length === 0 && !currentInterim && (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400 space-y-4">
@@ -164,7 +158,6 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
             key="interim-active"
             segment={currentInterim}
             settings={settings}
-            speakers={speakers}
           />
         )}
 
@@ -174,8 +167,6 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
             key={segment.id}
             segment={segment}
             settings={settings}
-            speakers={speakers}
-            onReassignSpeaker={onReassignSpeaker}
           />
         ))}
       </div>

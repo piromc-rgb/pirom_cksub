@@ -13,7 +13,6 @@ export interface AppSettings {
   fontSize: SubtitleFontSize;
   textColor: SubtitleThemeColor;
   bgOpacity: number; // 0.2 to 1.0
-  showSpeaker: boolean;
   showTimestamp: boolean;
   autoScroll: boolean;
   customTerms: TerminologyRule[];
@@ -27,7 +26,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontSize: 'medium',
   textColor: 'cyan',
   bgOpacity: 0.85,
-  showSpeaker: true,
   showTimestamp: true,
   autoScroll: true,
   customTerms: [

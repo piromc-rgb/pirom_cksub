@@ -230,16 +230,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={currentSettings.showSpeaker}
-                    onChange={(e) => setCurrentSettings({ ...currentSettings, showSpeaker: e.target.checked })}
-                    className="rounded border-slate-700 text-indigo-600 focus:ring-0"
-                  />
-                  <span>แสดงชื่อผู้พูด (Show Speaker)</span>
-                </label>
-
-                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                  <input
-                    type="checkbox"
                     checked={currentSettings.showTimestamp}
                     onChange={(e) => setCurrentSettings({ ...currentSettings, showTimestamp: e.target.checked })}
                     className="rounded border-slate-700 text-indigo-600 focus:ring-0"

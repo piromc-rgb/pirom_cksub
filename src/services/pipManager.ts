@@ -121,7 +121,6 @@ export class SubtitlePiPManager {
       return;
     }
 
-    const speakerHtml = this.settings.showSpeaker ? `<div style="font-size: 13px; color: #94a3b8; margin-bottom: 4px; font-weight: 500;">🎙️ ${sub.speaker} <span style="opacity: 0.6; font-size: 11px;">[${sub.timestamp}]</span></div>` : '';
     const thaiColor = this.settings.textColor === 'yellow' ? '#fde047' : this.settings.textColor === 'cyan' ? '#38bdf8' : '#ffffff';
 
     let content = '';
@@ -134,7 +133,6 @@ export class SubtitlePiPManager {
 
     body.innerHTML = `
       <div style="font-family: 'Inter', 'Prompt', sans-serif; background: rgba(15, 23, 42, ${this.settings.bgOpacity}); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(56, 189, 248, 0.2);">
-        ${speakerHtml}
         ${content}
       </div>
     `;
@@ -166,13 +164,6 @@ export class SubtitlePiPManager {
       } else {
         ctx.textAlign = 'left';
         let y = 35;
-
-        if (this.settings.showSpeaker) {
-          ctx.fillStyle = '#38bdf8';
-          ctx.font = 'bold 14px Inter, sans-serif';
-          ctx.fillText(`🎙️ ${this.currentSubtitle.speaker} (${this.currentSubtitle.timestamp})`, 30, y);
-          y += 25;
-        }
 
         // English Text (Top Row)
         if (this.settings.displayMode !== 'thai-only') {

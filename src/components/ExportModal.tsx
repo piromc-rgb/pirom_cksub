@@ -42,13 +42,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       const endTime = startTime + 3500;
       output += `${index + 1}\n`;
       output += `${formatSrtTime(startTime)} --> ${formatSrtTime(endTime)}\n`;
-      const speakerPrefix = settings.showSpeaker && sub.speaker ? `[${sub.speaker}] ` : '';
       if (settings.displayMode === 'bilingual') {
-        output += `${speakerPrefix}${sub.thaiText}\n${sub.englishText}\n\n`;
+        output += `${sub.thaiText}\n${sub.englishText}\n\n`;
       } else if (settings.displayMode === 'thai-only') {
-        output += `${speakerPrefix}${sub.thaiText}\n\n`;
+        output += `${sub.thaiText}\n\n`;
       } else {
-        output += `${speakerPrefix}${sub.englishText}\n\n`;
+        output += `${sub.englishText}\n\n`;
       }
     });
     return output;
@@ -59,7 +58,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
    */
   const generateTxt = () => {
     return subtitles
-      .map(s => `[${s.timestamp}] ${s.speaker}:\n(EN) ${s.englishText}\n(TH) ${s.thaiText}\n`)
+      .map(s => `[${s.timestamp}]\n(EN) ${s.englishText}\n(TH) ${s.thaiText}\n`)
       .join('\n');
   };
 
