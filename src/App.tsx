@@ -280,7 +280,7 @@ export const App: React.FC = () => {
 
   // Handle Interim (Word-by-word streaming)
   const handleInterimSpeech = (rawEnglishText: string, speakerId?: string) => {
-    let englishText = rawEnglishText.trim();
+    const englishText = rawEnglishText.trim();
     if (!englishText) return;
 
     if (speakerId && autoDiarize) {
@@ -301,38 +301,6 @@ export const App: React.FC = () => {
         };
         setSpeakers((prev) => [...prev, newSpk]);
         setActiveSpeakerId(speakerId);
-      }
-    }
-
-    // Natural Clause Segmentation for long continuous speech
-    // When interim stream reaches >= 20 words with natural clause transitions, commit the completed clause!
-    const words = englishText.split(/\s+/);
-    if (words.length >= 20) {
-      let breakIndex = -1;
-      for (let i = 12; i < words.length - 4; i++) {
-        const w = words[i].toLowerCase();
-        const nextW = words[i + 1]?.toLowerCase() || '';
-        if (
-          (w === 'and' && (nextW === 'also' || nextW === 'then' || nextW === 'to' || nextW === 'duplicate' || nextW === 'have' || nextW === 'make')) ||
-          (w === 'but' && (nextW === 'also' || nextW === 'to' || nextW === 'we')) ||
-          w === 'so' ||
-          w === 'because' ||
-          w === 'however' ||
-          w.endsWith('.') ||
-          w.endsWith('?') ||
-          w.endsWith('!') ||
-          w.endsWith(',')
-        ) {
-          breakIndex = i;
-          break;
-        }
-      }
-
-      if (breakIndex !== -1) {
-        const finalizedClause = words.slice(0, breakIndex).join(' ');
-        const remainingClause = words.slice(breakIndex).join(' ');
-        handleFinalSpeech(finalizedClause, 0.95, speakerId);
-        englishText = remainingClause;
       }
     }
 
@@ -400,17 +368,34 @@ export const App: React.FC = () => {
     // 1. Immediately commit new finalized segment to subtitles list
     setSubtitles((prev) => [...prev, newSegment]);
 
-    // 2. Only clear interim if it hasn't already begun streaming the next sentence!
+    // 2. Clear or adjust interim without rollback or ghosting
+    const normalize = (s: string) => s.replace(/[.,/#!$%^&*;:{}=\-_`~()?'"]/g, '').trim().toLowerCase();
+    const normClean = normalize(clean);
+
     setCurrentInterim((prev) => {
       if (!prev) return null;
-      // If the current interim already contains NEW words different from this finalized sentence, PRESERVE IT!
-      if (prev.englishText !== clean && !clean.endsWith(prev.englishText)) {
-        return prev;
+      const normPrev = normalize(prev.englishText);
+      // If the interim text matches or was part of the finalized sentence, clear it
+      if (normPrev === normClean || normClean.startsWith(normPrev) || normClean.endsWith(normPrev)) {
+        return null;
+      }
+      // If the interim already contains NEW words beyond the finalized sentence, retain only the new words
+      if (normPrev.startsWith(normClean) && prev.englishText.length > clean.length) {
+        const remaining = prev.englishText.slice(clean.length).trim();
+        if (remaining) {
+          return {
+            ...prev,
+            englishText: remaining,
+            thaiText: '',
+          };
+        }
+        return null;
       }
       return null;
     });
 
-    if (latestInterimEnglishRef.current === clean) {
+    const normLatest = normalize(latestInterimEnglishRef.current);
+    if (!normLatest || normLatest === normClean || normClean.startsWith(normLatest) || normClean.endsWith(normLatest)) {
       latestInterimEnglishRef.current = '';
       interimThaiRef.current = '';
       queuedTextRef.current = '';

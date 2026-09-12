@@ -58,11 +58,12 @@ export class MeetingSpeechRecognizer {
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const item = event.results[i];
+        const text = item[0]?.transcript || '';
         if (item.isFinal) {
-          finalTranscript += item[0].transcript;
-          if (item[0].confidence) confidence = item[0].confidence;
+          finalTranscript = finalTranscript ? `${finalTranscript} ${text.trim()}` : text.trim();
+          if (item[0]?.confidence) confidence = item[0].confidence;
         } else {
-          interimTranscript += item[0].transcript;
+          interimTranscript = interimTranscript ? `${interimTranscript} ${text.trim()}` : text.trim();
         }
       }
 
