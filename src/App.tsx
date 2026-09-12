@@ -60,6 +60,8 @@ export const App: React.FC = () => {
   const [autoDiarize, setAutoDiarize] = useState<boolean>(true);
   const [isVoiceActive, setIsVoiceActive] = useState<boolean>(false);
   const activeSpeakerRef = useRef<SpeakerProfile>(DEFAULT_SPEAKERS[0]);
+  const speakersRef = useRef<SpeakerProfile[]>(DEFAULT_SPEAKERS);
+  speakersRef.current = speakers;
 
   // Keep activeSpeakerRef in sync
   useEffect(() => {
@@ -72,7 +74,7 @@ export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const saved = localStorage.getItem('felo_app_settings');
-      return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved), showSpeaker: true } : DEFAULT_SETTINGS;
     } catch {
       return DEFAULT_SETTINGS;
     }
@@ -120,6 +122,10 @@ export const App: React.FC = () => {
   useEffect(() => {
     speakerDiarizerRef.current = new SpeakerDiarizer(speakers, {
       onSpeakerChanged: (newSpkId) => {
+        const matched = speakersRef.current.find((s) => s.id === newSpkId);
+        if (matched) {
+          activeSpeakerRef.current = matched;
+        }
         setActiveSpeakerId(newSpkId);
       },
       onVoiceActivity: (isSpeaking) => {

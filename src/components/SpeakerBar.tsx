@@ -51,18 +51,24 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState<SpeakerColor>('cyan');
+  const [editPitch, setEditPitch] = useState<number>(150);
 
   const handleStartEdit = (speaker: SpeakerProfile, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingId(speaker.id);
     setEditName(speaker.name);
     setEditColor(speaker.color);
+    setEditPitch(speaker.pitchBaseline || 150);
   };
 
   const handleSaveEdit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (editingId && editName.trim()) {
-      onUpdateSpeaker(editingId, { name: editName.trim(), color: editColor });
+      onUpdateSpeaker(editingId, { 
+        name: editName.trim(), 
+        color: editColor,
+        pitchBaseline: editPitch
+      });
       setEditingId(null);
     }
   };
@@ -101,6 +107,11 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
               )}
 
               <span>{spk.name}</span>
+              {spk.pitchBaseline && (
+                <span className="text-[9px] opacity-70 px-1 py-0.2 rounded bg-black/25 font-mono">
+                  {spk.pitchBaseline < 145 ? 'ทุ้ม' : spk.pitchBaseline > 195 ? 'แหลม' : 'กลาง'}
+                </span>
+              )}
 
               {/* Edit button */}
               <button
@@ -207,6 +218,31 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
                   >
                     <span className={`w-2 h-2 rounded-full ${col.dot}`} />
                     <span>{col.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 block mb-1.5">โทนเสียงเพื่อแยกผู้พูดอัตโนมัติ (Voice Tone)</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'เสียงทุ้ม (ชาย)', pitch: 125, desc: '~125 Hz' },
+                  { label: 'เสียงกลาง (ทั่วไป)', pitch: 170, desc: '~170 Hz' },
+                  { label: 'เสียงแหลม (หญิง)', pitch: 220, desc: '~220 Hz' },
+                ].map((tone) => (
+                  <button
+                    key={tone.pitch}
+                    type="button"
+                    onClick={() => setEditPitch(tone.pitch)}
+                    className={`px-2.5 py-1.5 rounded-lg border text-xs text-left transition-all ${
+                      Math.abs(editPitch - tone.pitch) < 25
+                        ? 'bg-indigo-600/30 border-indigo-400 text-white shadow-sm'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="font-medium text-[11px]">{tone.label}</div>
+                    <div className="text-[10px] text-slate-500">{tone.desc}</div>
                   </button>
                 ))}
               </div>

@@ -20,10 +20,10 @@ export class SpeakerDiarizer {
   private bufferSize = 2048;
   private timeBuffer: Float32Array = new Float32Array(this.bufferSize);
 
-  // Pitch tracking & conversational state
-  private recentPitches: number[] = [];
-  private lastVoicedTimestamp: number = 0;
-  private silenceDurationMs: number = 0;
+  // Conversational state & pitch history
+  private recentPitchBuffer: number[] = [];
+  private lastVoicedTime: number = 0;
+  private lastSilenceDuration: number = 0;
   private lastAnalysisTime: number = 0;
 
   constructor(speakers: SpeakerProfile[], callbacks: DiarizerCallbacks) {
@@ -61,8 +61,10 @@ export class SpeakerDiarizer {
       this.sourceNode.connect(this.analyser);
 
       // Analyser only - DO NOT connect to audioContext.destination to prevent any audio feedback or echo
-      this.lastVoicedTimestamp = Date.now();
+      this.lastVoicedTime = Date.now();
+      this.lastSilenceDuration = 0;
       this.lastAnalysisTime = 0;
+      this.recentPitchBuffer = [];
       this.loop();
     } catch (e) {
       console.warn('SpeakerDiarizer init error:', e);
@@ -93,8 +95,8 @@ export class SpeakerDiarizer {
     if (!this.analyser) return;
 
     const now = Date.now();
-    // Throttle CPU-intensive autocorrelation loop to every 100ms instead of 16ms (60fps)
-    if (now - this.lastAnalysisTime < 100) {
+    // Throttle autocorrelation calculation to run every 90ms
+    if (now - this.lastAnalysisTime < 90) {
       this.animFrameId = requestAnimationFrame(this.loop);
       return;
     }
@@ -104,32 +106,50 @@ export class SpeakerDiarizer {
 
     const { rms, pitch } = this.detectPitchAndEnergy(this.timeBuffer, this.audioContext?.sampleRate || 44100);
 
-    const isSpeaking = rms > 0.018 && pitch > 65 && pitch < 400;
+    const isSpeaking = rms > 0.012 && (pitch > 65 || rms > 0.03);
 
     if (this.callbacks.onVoiceActivity) {
       this.callbacks.onVoiceActivity(isSpeaking, pitch, rms);
     }
 
     if (isSpeaking) {
-      this.silenceDurationMs = now - this.lastVoicedTimestamp;
-      this.lastVoicedTimestamp = now;
+      if (this.recentPitchBuffer.length === 0 && this.lastVoicedTime > 0) {
+        // Speech started after a pause
+        this.lastSilenceDuration = now - this.lastVoicedTime;
+      }
+      this.lastVoicedTime = now;
 
-      if (this.isEnabled && this.speakers.length > 1) {
-        this.recentPitches.push(pitch);
-        if (this.recentPitches.length > 8) {
-          this.recentPitches.shift();
+      if (pitch >= 70 && pitch <= 420) {
+        this.recentPitchBuffer.push(pitch);
+        if (this.recentPitchBuffer.length > 8) {
+          this.recentPitchBuffer.shift();
         }
+      }
 
-        // If after a significant conversational pause (> 1100ms) or significant pitch shift
-        if (this.silenceDurationMs > 1100 && this.recentPitches.length >= 4) {
-          const avgPitch = this.recentPitches.reduce((a, b) => a + b, 0) / this.recentPitches.length;
-          const detectedSpeakerId = this.classifySpeaker(avgPitch);
+      // Check speaker classification when we have at least 2 valid pitch measurements
+      if (this.isEnabled && this.speakers.length > 1 && this.recentPitchBuffer.length >= 2) {
+        const sorted = [...this.recentPitchBuffer].sort((a, b) => a - b);
+        const medianPitch = sorted[Math.floor(sorted.length / 2)];
 
-          if (detectedSpeakerId && detectedSpeakerId !== this.activeSpeakerId) {
-            this.activeSpeakerId = detectedSpeakerId;
-            this.callbacks.onSpeakerChanged(detectedSpeakerId);
+        const bestSpeakerId = this.classifySpeaker(medianPitch);
+        if (bestSpeakerId && bestSpeakerId !== this.activeSpeakerId) {
+          const currentProfile = this.speakers.find((s) => s.id === this.activeSpeakerId);
+          const currentBaseline = currentProfile?.pitchBaseline || 150;
+          const pitchDiff = Math.abs(medianPitch - currentBaseline);
+
+          // Switch speaker if there was a pause (> 300ms) OR significant pitch difference (> 28 Hz)
+          if (this.lastSilenceDuration > 300 || pitchDiff > 28) {
+            this.activeSpeakerId = bestSpeakerId;
+            this.callbacks.onSpeakerChanged(bestSpeakerId);
+            this.lastSilenceDuration = 0; // reset
           }
         }
+      }
+    } else {
+      // Silence period
+      if (now - this.lastVoicedTime > 350) {
+        // Pause detected - clear buffer so the next speaker starts fresh
+        this.recentPitchBuffer = [];
       }
     }
 
@@ -140,7 +160,7 @@ export class SpeakerDiarizer {
    * Find closest speaker profile matching fundamental pitch F0
    */
   private classifySpeaker(pitchHz: number): string | null {
-    if (this.speakers.length <= 1) return null;
+    if (this.speakers.length <= 1) return this.speakers[0]?.id || null;
 
     let closestId: string = this.speakers[0].id;
     let minDiff = Infinity;
@@ -158,7 +178,7 @@ export class SpeakerDiarizer {
   }
 
   /**
-   * Time-domain autocorrelation pitch detection
+   * Normalized cross-correlation pitch detection
    */
   private detectPitchAndEnergy(buffer: any, sampleRate: number): { rms: number; pitch: number } {
     let sumSquares = 0;
@@ -167,31 +187,34 @@ export class SpeakerDiarizer {
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
 
-    if (rms < 0.015) {
+    if (rms < 0.01) {
       return { rms, pitch: 0 };
     }
 
-    // Autocorrelation within human vocal range (70Hz - 450Hz)
-    const minPeriod = Math.floor(sampleRate / 450);
+    // Autocorrelation within human vocal range (70Hz - 420Hz)
+    const minPeriod = Math.floor(sampleRate / 420);
     const maxPeriod = Math.floor(sampleRate / 70);
 
-    let bestR = 0;
+    let maxNormR = 0;
     let bestPeriod = -1;
 
     for (let period = minPeriod; period <= maxPeriod; period++) {
       let r = 0;
-      for (let i = 0; i < buffer.length - period; i++) {
+      const count = buffer.length - period;
+      for (let i = 0; i < count; i++) {
         r += buffer[i] * buffer[i + period];
       }
-      if (r > bestR) {
-        bestR = r;
+      const normR = r / count;
+      if (normR > maxNormR) {
+        maxNormR = normR;
         bestPeriod = period;
       }
     }
 
+    const meanSquare = sumSquares / buffer.length;
     let pitch = 0;
-    if (bestPeriod > 0 && bestR > 0.3 * sumSquares) {
-      pitch = sampleRate / bestPeriod;
+    if (bestPeriod > 0 && maxNormR > 0.28 * meanSquare) {
+      pitch = Math.round(sampleRate / bestPeriod);
     }
 
     return { rms, pitch };
