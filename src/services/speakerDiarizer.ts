@@ -9,10 +9,11 @@ export class SpeakerDiarizer {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private lowpassNode: BiquadFilterNode | null = null;
   private animFrameId: number | null = null;
 
   private speakers: SpeakerProfile[] = [];
-  private activeSpeakerId: string = 'spk_1';
+  private activeSpeakerId: string = 'spk_male';
   private callbacks: DiarizerCallbacks;
   private isEnabled: boolean = true;
 
@@ -20,10 +21,10 @@ export class SpeakerDiarizer {
   private bufferSize = 2048;
   private timeBuffer: Float32Array = new Float32Array(this.bufferSize);
 
-  // Conversational state & pitch history
+  // Conversational state & gender voting history
   private recentPitchBuffer: number[] = [];
+  private recentGenderVotes: string[] = [];
   private lastVoicedTime: number = 0;
-  private lastSilenceDuration: number = 0;
   private lastAnalysisTime: number = 0;
 
   constructor(speakers: SpeakerProfile[], callbacks: DiarizerCallbacks) {
@@ -58,13 +59,22 @@ export class SpeakerDiarizer {
       this.analyser.fftSize = this.bufferSize;
 
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
-      this.sourceNode.connect(this.analyser);
+
+      // Low-pass filter (350 Hz) keeps the fundamental frequency F0 (80-300 Hz)
+      // and eliminates upper harmonics / formants that cause octave errors
+      this.lowpassNode = this.audioContext.createBiquadFilter();
+      this.lowpassNode.type = 'lowpass';
+      this.lowpassNode.frequency.value = 350;
+      this.lowpassNode.Q.value = 0.7;
+
+      this.sourceNode.connect(this.lowpassNode);
+      this.lowpassNode.connect(this.analyser);
 
       // Analyser only - DO NOT connect to audioContext.destination to prevent any audio feedback or echo
       this.lastVoicedTime = Date.now();
-      this.lastSilenceDuration = 0;
       this.lastAnalysisTime = 0;
       this.recentPitchBuffer = [];
+      this.recentGenderVotes = [];
       this.loop();
     } catch (e) {
       console.warn('SpeakerDiarizer init error:', e);
@@ -82,6 +92,12 @@ export class SpeakerDiarizer {
       } catch (e) {}
       this.sourceNode = null;
     }
+    if (this.lowpassNode) {
+      try {
+        this.lowpassNode.disconnect();
+      } catch (e) {}
+      this.lowpassNode = null;
+    }
     if (this.audioContext && this.audioContext.state !== 'closed') {
       try {
         this.audioContext.close();
@@ -95,8 +111,8 @@ export class SpeakerDiarizer {
     if (!this.analyser) return;
 
     const now = Date.now();
-    // Throttle autocorrelation calculation to run every 90ms
-    if (now - this.lastAnalysisTime < 90) {
+    // Throttle autocorrelation calculation to run every 80ms
+    if (now - this.lastAnalysisTime < 80) {
       this.animFrameId = requestAnimationFrame(this.loop);
       return;
     }
@@ -106,49 +122,51 @@ export class SpeakerDiarizer {
 
     const { rms, pitch } = this.detectPitchAndEnergy(this.timeBuffer, this.audioContext?.sampleRate || 44100);
 
-    const isSpeaking = rms > 0.012 && (pitch > 65 || rms > 0.03);
+    const isSpeaking = rms > 0.01 && (pitch > 65 || rms > 0.025);
 
     if (this.callbacks.onVoiceActivity) {
       this.callbacks.onVoiceActivity(isSpeaking, pitch, rms);
     }
 
     if (isSpeaking) {
-      if (this.recentPitchBuffer.length === 0 && this.lastVoicedTime > 0) {
-        // Speech started after a pause
-        this.lastSilenceDuration = now - this.lastVoicedTime;
-      }
       this.lastVoicedTime = now;
 
-      if (pitch >= 70 && pitch <= 420) {
+      if (pitch >= 75 && pitch <= 360) {
+        const detectedGenderId = this.classifyGender(pitch);
         this.recentPitchBuffer.push(pitch);
-        if (this.recentPitchBuffer.length > 8) {
+        this.recentGenderVotes.push(detectedGenderId);
+
+        if (this.recentGenderVotes.length > 5) {
+          this.recentGenderVotes.shift();
+        }
+        if (this.recentPitchBuffer.length > 5) {
           this.recentPitchBuffer.shift();
         }
-      }
 
-      // Check speaker classification when we have at least 2 valid pitch measurements
-      if (this.isEnabled && this.speakers.length > 1 && this.recentPitchBuffer.length >= 2) {
-        const sorted = [...this.recentPitchBuffer].sort((a, b) => a - b);
-        const medianPitch = sorted[Math.floor(sorted.length / 2)];
+        // Evaluate votes over last few frames for smooth, reliable switching
+        if (this.isEnabled && this.speakers.length > 1 && this.recentGenderVotes.length >= 2) {
+          const maleSpeaker = this.speakers.find((s) => s.gender === 'male' || s.id === 'spk_male') || this.speakers[0];
+          const femaleSpeaker = this.speakers.find((s) => s.gender === 'female' || s.id === 'spk_female') || this.speakers[1];
 
-        const bestSpeakerId = this.classifySpeaker(medianPitch);
-        if (bestSpeakerId && bestSpeakerId !== this.activeSpeakerId) {
-          const currentProfile = this.speakers.find((s) => s.id === this.activeSpeakerId);
-          const currentBaseline = currentProfile?.pitchBaseline || 150;
-          const pitchDiff = Math.abs(medianPitch - currentBaseline);
+          let maleCount = 0;
+          let femaleCount = 0;
+          for (const vote of this.recentGenderVotes) {
+            if (vote === maleSpeaker.id) maleCount++;
+            else if (femaleSpeaker && vote === femaleSpeaker.id) femaleCount++;
+          }
 
-          // Switch speaker if there was a pause (> 300ms) OR significant pitch difference (> 28 Hz)
-          if (this.lastSilenceDuration > 300 || pitchDiff > 28) {
-            this.activeSpeakerId = bestSpeakerId;
-            this.callbacks.onSpeakerChanged(bestSpeakerId);
-            this.lastSilenceDuration = 0; // reset
+          const consensusId = maleCount >= femaleCount ? maleSpeaker.id : (femaleSpeaker ? femaleSpeaker.id : maleSpeaker.id);
+
+          if (consensusId && consensusId !== this.activeSpeakerId) {
+            this.activeSpeakerId = consensusId;
+            this.callbacks.onSpeakerChanged(consensusId);
           }
         }
       }
     } else {
-      // Silence period
-      if (now - this.lastVoicedTime > 350) {
-        // Pause detected - clear buffer so the next speaker starts fresh
+      // Pause
+      if (now - this.lastVoicedTime > 400) {
+        this.recentGenderVotes = [];
         this.recentPitchBuffer = [];
       }
     }
@@ -157,24 +175,18 @@ export class SpeakerDiarizer {
   };
 
   /**
-   * Find closest speaker profile matching fundamental pitch F0
+   * Classify whether pitch belongs to Male or Female voice profile
    */
-  private classifySpeaker(pitchHz: number): string | null {
-    if (this.speakers.length <= 1) return this.speakers[0]?.id || null;
+  private classifyGender(pitchHz: number): string {
+    const maleSpeaker = this.speakers.find((s) => s.gender === 'male' || s.id === 'spk_male') || this.speakers[0];
+    const femaleSpeaker = this.speakers.find((s) => s.gender === 'female' || s.id === 'spk_female') || this.speakers[1] || this.speakers[0];
 
-    let closestId: string = this.speakers[0].id;
-    let minDiff = Infinity;
+    // Standard acoustic separation threshold between adult male and female speech: 165 Hz
+    // Male F0: 85 - 160 Hz (center ~120 Hz)
+    // Female F0: 175 - 265 Hz (center ~215 Hz)
+    const threshold = 165;
 
-    for (const spk of this.speakers) {
-      const baseline = spk.pitchBaseline || 150;
-      const diff = Math.abs(pitchHz - baseline);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestId = spk.id;
-      }
-    }
-
-    return closestId;
+    return pitchHz < threshold ? maleSpeaker.id : femaleSpeaker.id;
   }
 
   /**
@@ -187,13 +199,13 @@ export class SpeakerDiarizer {
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
 
-    if (rms < 0.01) {
+    if (rms < 0.008) {
       return { rms, pitch: 0 };
     }
 
-    // Autocorrelation within human vocal range (70Hz - 420Hz)
-    const minPeriod = Math.floor(sampleRate / 420);
-    const maxPeriod = Math.floor(sampleRate / 70);
+    // Autocorrelation within human vocal range (75Hz - 380Hz)
+    const minPeriod = Math.floor(sampleRate / 380);
+    const maxPeriod = Math.floor(sampleRate / 75);
 
     let maxNormR = 0;
     let bestPeriod = -1;
@@ -213,7 +225,7 @@ export class SpeakerDiarizer {
 
     const meanSquare = sumSquares / buffer.length;
     let pitch = 0;
-    if (bestPeriod > 0 && maxNormR > 0.28 * meanSquare) {
+    if (bestPeriod > 0 && maxNormR > 0.22 * meanSquare) {
       pitch = Math.round(sampleRate / bestPeriod);
     }
 

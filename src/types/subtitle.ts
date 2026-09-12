@@ -1,17 +1,19 @@
 export type SpeakerColor = 'cyan' | 'purple' | 'emerald' | 'amber' | 'rose' | 'indigo' | 'blue';
 
+export type SpeakerGender = 'male' | 'female';
+
 export interface SpeakerProfile {
   id: string;
   name: string;
   color: SpeakerColor;
-  pitchBaseline?: number; // Estimated F0 in Hz (e.g. 110 for deep voice, 210 for high voice)
+  gender?: SpeakerGender;
+  pitchBaseline?: number; // Estimated F0 in Hz (e.g. 120 for male voice, 215 for female voice)
   isDefault?: boolean;
 }
 
 export const DEFAULT_SPEAKERS: SpeakerProfile[] = [
-  { id: 'spk_1', name: 'Speaker 1 (Me)', color: 'cyan', pitchBaseline: 130, isDefault: true },
-  { id: 'spk_2', name: 'Speaker 2', color: 'purple', pitchBaseline: 210 },
-  { id: 'spk_3', name: 'Speaker 3', color: 'emerald', pitchBaseline: 170 },
+  { id: 'spk_male', name: 'ผู้ชาย (Male)', color: 'cyan', gender: 'male', pitchBaseline: 120, isDefault: true },
+  { id: 'spk_female', name: 'ผู้หญิง (Female)', color: 'rose', gender: 'female', pitchBaseline: 215 },
 ];
 
 export interface SubtitleSegment {

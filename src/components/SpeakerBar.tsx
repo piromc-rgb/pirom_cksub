@@ -51,14 +51,17 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState<SpeakerColor>('cyan');
-  const [editPitch, setEditPitch] = useState<number>(150);
+  const [editGender, setEditGender] = useState<'male' | 'female'>('male');
+  const [editPitch, setEditPitch] = useState<number>(120);
 
   const handleStartEdit = (speaker: SpeakerProfile, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingId(speaker.id);
     setEditName(speaker.name);
     setEditColor(speaker.color);
-    setEditPitch(speaker.pitchBaseline || 150);
+    const g = speaker.gender || (speaker.pitchBaseline && speaker.pitchBaseline > 165 ? 'female' : 'male');
+    setEditGender(g);
+    setEditPitch(speaker.pitchBaseline || (g === 'female' ? 215 : 120));
   };
 
   const handleSaveEdit = (e?: React.FormEvent) => {
@@ -67,6 +70,7 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
       onUpdateSpeaker(editingId, { 
         name: editName.trim(), 
         color: editColor,
+        gender: editGender,
         pitchBaseline: editPitch
       });
       setEditingId(null);
@@ -106,12 +110,8 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
                 <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-current' : 'bg-slate-500'}`} />
               )}
 
+              <span className="text-xs">{spk.gender === 'female' ? '👩' : '👨'}</span>
               <span>{spk.name}</span>
-              {spk.pitchBaseline && (
-                <span className="text-[9px] opacity-70 px-1 py-0.2 rounded bg-black/25 font-mono">
-                  {spk.pitchBaseline < 145 ? 'ทุ้ม' : spk.pitchBaseline > 195 ? 'แหลม' : 'กลาง'}
-                </span>
-              )}
 
               {/* Edit button */}
               <button
@@ -224,27 +224,45 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 block mb-1.5">โทนเสียงเพื่อแยกผู้พูดอัตโนมัติ (Voice Tone)</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: 'เสียงทุ้ม (ชาย)', pitch: 125, desc: '~125 Hz' },
-                  { label: 'เสียงกลาง (ทั่วไป)', pitch: 170, desc: '~170 Hz' },
-                  { label: 'เสียงแหลม (หญิง)', pitch: 220, desc: '~220 Hz' },
-                ].map((tone) => (
-                  <button
-                    key={tone.pitch}
-                    type="button"
-                    onClick={() => setEditPitch(tone.pitch)}
-                    className={`px-2.5 py-1.5 rounded-lg border text-xs text-left transition-all ${
-                      Math.abs(editPitch - tone.pitch) < 25
-                        ? 'bg-indigo-600/30 border-indigo-400 text-white shadow-sm'
-                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="font-medium text-[11px]">{tone.label}</div>
-                    <div className="text-[10px] text-slate-500">{tone.desc}</div>
-                  </button>
-                ))}
+              <label className="text-xs text-slate-400 block mb-1.5">ประเภทเสียงผู้พูด (Speaker Gender / Voice)</label>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditGender('male');
+                    setEditPitch(120);
+                  }}
+                  className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs text-left transition-all ${
+                    editGender === 'male'
+                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-sm'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-lg">👨</span>
+                  <div>
+                    <div className="font-semibold text-white">เสียงผู้ชาย (Male)</div>
+                    <div className="text-[10px] text-slate-400">โทนทุ้มลึก (~120 Hz)</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditGender('female');
+                    setEditPitch(215);
+                  }}
+                  className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs text-left transition-all ${
+                    editGender === 'female'
+                      ? 'bg-rose-500/20 border-rose-400 text-rose-200 shadow-sm'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-lg">👩</span>
+                  <div>
+                    <div className="font-semibold text-white">เสียงผู้หญิง (Female)</div>
+                    <div className="text-[10px] text-slate-400">โทนแหลมสูง (~215 Hz)</div>
+                  </div>
+                </button>
               </div>
             </div>
 

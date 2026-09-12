@@ -47,16 +47,22 @@ export const App: React.FC = () => {
   const [isPipActive, setIsPipActive] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Multi-Speaker State
+  // Multi-Speaker State (Default to Male & Female)
   const [speakers, setSpeakers] = useState<SpeakerProfile[]>(() => {
     try {
       const saved = localStorage.getItem('chaken_speakers');
-      return saved ? JSON.parse(saved) : DEFAULT_SPEAKERS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.some((p: any) => p.gender === 'male' || p.gender === 'female')) {
+          return parsed;
+        }
+      }
+      return DEFAULT_SPEAKERS;
     } catch {
       return DEFAULT_SPEAKERS;
     }
   });
-  const [activeSpeakerId, setActiveSpeakerId] = useState<string>('spk_1');
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string>('spk_male');
   const [autoDiarize, setAutoDiarize] = useState<boolean>(true);
   const [isVoiceActive, setIsVoiceActive] = useState<boolean>(false);
   const activeSpeakerRef = useRef<SpeakerProfile>(DEFAULT_SPEAKERS[0]);
@@ -237,13 +243,14 @@ export const App: React.FC = () => {
     const nextNum = speakers.length + 1;
     const colors: SpeakerColor[] = ['cyan', 'purple', 'emerald', 'amber', 'rose', 'indigo', 'blue'];
     const nextColor = colors[speakers.length % colors.length];
-    const baselinePitch = 120 + ((speakers.length * 55) % 190);
+    const isFemale = nextNum % 2 === 0;
 
     const newSpk: SpeakerProfile = {
       id: `spk_${Date.now()}`,
-      name: `Speaker ${nextNum}`,
+      name: isFemale ? `ผู้หญิง ${nextNum}` : `ผู้ชาย ${nextNum}`,
       color: nextColor,
-      pitchBaseline: baselinePitch,
+      gender: isFemale ? 'female' : 'male',
+      pitchBaseline: isFemale ? 215 : 120,
     };
 
     setSpeakers((prev) => {

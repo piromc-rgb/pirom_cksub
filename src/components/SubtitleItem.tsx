@@ -91,7 +91,10 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({
                   segment.isFinal && onReassignSpeaker ? 'hover:brightness-125 cursor-pointer' : ''
                 }`}
               >
-                <span>🎙️ {segment.speaker}</span>
+                <span className="flex items-center gap-1">
+                  <span>{matchedSpeaker?.gender === 'female' ? '👩' : '👨'}</span>
+                  <span>{segment.speaker}</span>
+                </span>
                 {segment.isFinal && onReassignSpeaker && speakers.length > 1 && (
                   <ChevronDown className="w-3 h-3 opacity-60" />
                 )}
@@ -118,7 +121,10 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({
                           isSelected ? `${badge} font-bold` : 'text-slate-300 hover:bg-slate-800'
                         }`}
                       >
-                        <span>{spk.name}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span>{spk.gender === 'female' ? '👩' : '👨'}</span>
+                          <span>{spk.name}</span>
+                        </span>
                         {isSelected && <Check className="w-3 h-3 text-current" />}
                       </button>
                     );
