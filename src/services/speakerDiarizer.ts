@@ -1,13 +1,8 @@
-import { SpeakerProfile, VoiceTonePreset, detectVoiceTonePreset } from '../types/subtitle';
+import { SpeakerProfile } from '../types/subtitle';
 
 export interface DiarizerCallbacks {
   onSpeakerChanged: (speakerId: string) => void;
-  onVoiceActivity?: (
-    isSpeaking: boolean,
-    pitchHz: number,
-    volume: number,
-    detectedTone?: VoiceTonePreset
-  ) => void;
+  onVoiceActivity?: (isSpeaking: boolean, pitchHz: number, volume: number) => void;
 }
 
 export class SpeakerDiarizer {
@@ -97,16 +92,12 @@ export class SpeakerDiarizer {
     (this.analyser as any).getFloatTimeDomainData(this.timeBuffer);
 
     const now = Date.now();
-    const { rms, pitch } = this.detectPitchAndEnergy(
-      this.timeBuffer,
-      this.audioContext?.sampleRate || 44100
-    );
+    const { rms, pitch } = this.detectPitchAndEnergy(this.timeBuffer, this.audioContext?.sampleRate || 44100);
 
-    const isSpeaking = rms > 0.018 && pitch > 65 && pitch < 450;
-    const detectedTone = isSpeaking ? detectVoiceTonePreset(pitch) : undefined;
+    const isSpeaking = rms > 0.018 && pitch > 65 && pitch < 400;
 
     if (this.callbacks.onVoiceActivity) {
-      this.callbacks.onVoiceActivity(isSpeaking, Math.round(pitch), rms, detectedTone);
+      this.callbacks.onVoiceActivity(isSpeaking, pitch, rms);
     }
 
     if (isSpeaking) {
@@ -119,11 +110,10 @@ export class SpeakerDiarizer {
           this.recentPitches.shift();
         }
 
-        // If after conversational pause (> 1000ms) or significant vocal register shift
-        if (this.silenceDurationMs > 1000 && this.recentPitches.length >= 3) {
-          const sorted = [...this.recentPitches].sort((a, b) => a - b);
-          const medianPitch = sorted[Math.floor(sorted.length / 2)];
-          const detectedSpeakerId = this.classifySpeaker(medianPitch);
+        // If after a significant conversational pause (> 1100ms) or significant pitch shift
+        if (this.silenceDurationMs > 1100 && this.recentPitches.length >= 4) {
+          const avgPitch = this.recentPitches.reduce((a, b) => a + b, 0) / this.recentPitches.length;
+          const detectedSpeakerId = this.classifySpeaker(avgPitch);
 
           if (detectedSpeakerId && detectedSpeakerId !== this.activeSpeakerId) {
             this.activeSpeakerId = detectedSpeakerId;
@@ -137,31 +127,24 @@ export class SpeakerDiarizer {
   };
 
   /**
-   * Find closest speaker profile matching fundamental pitch F0 & tone category
+   * Find closest speaker profile matching fundamental pitch F0
    */
-  public classifySpeaker(pitchHz: number): string | null {
+  private classifySpeaker(pitchHz: number): string | null {
     if (this.speakers.length <= 1) return null;
 
-    const detectedTone = detectVoiceTonePreset(pitchHz);
-    let bestId: string = this.speakers[0].id;
-    let minScore = Infinity;
+    let closestId: string = this.speakers[0].id;
+    let minDiff = Infinity;
 
     for (const spk of this.speakers) {
       const baseline = spk.pitchBaseline || 150;
-      let diff = Math.abs(pitchHz - baseline);
-
-      // If speaker has a toneCategory matching the detected tone, give affinity bonus
-      if (spk.toneCategory && spk.toneCategory === detectedTone.id) {
-        diff = diff * 0.45; // 55% distance reduction bonus for exact tone category match!
-      }
-
-      if (diff < minScore) {
-        minScore = diff;
-        bestId = spk.id;
+      const diff = Math.abs(pitchHz - baseline);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestId = spk.id;
       }
     }
 
-    return bestId;
+    return closestId;
   }
 
   /**
@@ -178,9 +161,9 @@ export class SpeakerDiarizer {
       return { rms, pitch: 0 };
     }
 
-    // Autocorrelation within human vocal range (65Hz - 460Hz)
-    const minPeriod = Math.floor(sampleRate / 460);
-    const maxPeriod = Math.floor(sampleRate / 65);
+    // Autocorrelation within human vocal range (70Hz - 450Hz)
+    const minPeriod = Math.floor(sampleRate / 450);
+    const maxPeriod = Math.floor(sampleRate / 70);
 
     let bestR = 0;
     let bestPeriod = -1;

@@ -48,6 +48,9 @@ export class MeetingSpeechRecognizer {
       this.handlers.onStatusChange(true);
     };
 
+    let lastInterimText = '';
+    let lastInterimConfidence = 0.85;
+
     this.recognition.onresult = (event: any) => {
       let interimTranscript = '';
       let finalTranscript = '';
@@ -63,12 +66,17 @@ export class MeetingSpeechRecognizer {
         }
       }
 
-      if (interimTranscript.trim()) {
-        this.handlers.onInterim(interimTranscript.trim());
+      // CRITICAL: Process finalized chunk FIRST so it doesn't wipe subsequent interim
+      if (finalTranscript.trim()) {
+        lastInterimText = '';
+        this.handlers.onFinal(finalTranscript.trim(), confidence);
       }
 
-      if (finalTranscript.trim()) {
-        this.handlers.onFinal(finalTranscript.trim(), confidence);
+      // Then process any new interim for the next sentence
+      if (interimTranscript.trim()) {
+        lastInterimText = interimTranscript.trim();
+        lastInterimConfidence = confidence;
+        this.handlers.onInterim(interimTranscript.trim());
       }
     };
 
@@ -88,6 +96,13 @@ export class MeetingSpeechRecognizer {
     this.recognition.onend = () => {
       this.isCurrentlyListening = false;
       this.handlers.onStatusChange(false);
+
+      // CRITICAL: Flush any unfinalized interim speech so trailing words are NEVER lost on cut!
+      if (lastInterimText.trim()) {
+        const flushText = lastInterimText.trim();
+        lastInterimText = '';
+        this.handlers.onFinal(flushText, lastInterimConfidence);
+      }
 
       // Auto-restart if not manually stopped
       if (!this.isManuallyStopped) {

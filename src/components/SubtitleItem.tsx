@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Copy, Check, ChevronDown } from 'lucide-react';
-import { SubtitleSegment, SpeakerProfile, VOICE_TONE_PRESETS } from '../types/subtitle';
+import { SubtitleSegment, SpeakerProfile } from '../types/subtitle';
 import { AppSettings } from '../types/settings';
 import { getSpeakerBadgeClasses } from './SpeakerBar';
 
@@ -64,14 +64,11 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({
     emerald: 'text-emerald-300',
   }[settings.textColor];
 
-  // Get matching speaker profile & tone preset
+  // Get matching speaker profile
   const matchedSpeaker = speakers.find(
     (s) => s.id === segment.speakerId || s.name === segment.speaker
   );
   const speakerBadgeClass = getSpeakerBadgeClasses(matchedSpeaker?.color);
-  const tonePreset = matchedSpeaker?.toneCategory
-    ? VOICE_TONE_PRESETS.find((p) => p.id === matchedSpeaker.toneCategory)
-    : undefined;
 
   return (
     <div
@@ -95,11 +92,6 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({
                 }`}
               >
                 <span>🎙️ {segment.speaker}</span>
-                {tonePreset && (
-                  <span className="text-[10px] opacity-85 ml-0.5" title={tonePreset.name}>
-                    {tonePreset.emoji}
-                  </span>
-                )}
                 {segment.isFinal && onReassignSpeaker && speakers.length > 1 && (
                   <ChevronDown className="w-3 h-3 opacity-60" />
                 )}
@@ -107,14 +99,13 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({
 
               {/* Speaker Re-assignment Popover */}
               {isSpeakerMenuOpen && speakers.length > 0 && (
-                <div className="absolute left-0 top-full mt-1.5 z-40 bg-[#0e1422] border border-slate-700/90 rounded-xl p-1.5 shadow-2xl min-w-[170px] space-y-1 animate-fade-in">
+                <div className="absolute left-0 top-full mt-1.5 z-40 bg-[#0e1422] border border-slate-700/90 rounded-xl p-1.5 shadow-2xl min-w-[140px] space-y-1 animate-fade-in">
                   <div className="text-[10px] text-slate-400 px-2 py-1 font-semibold uppercase tracking-wider">
                     เปลี่ยนผู้พูด:
                   </div>
                   {speakers.map((spk) => {
                     const isSelected = spk.id === segment.speakerId || spk.name === segment.speaker;
                     const badge = getSpeakerBadgeClasses(spk.color);
-                    const spkTone = VOICE_TONE_PRESETS.find((p) => p.id === spk.toneCategory) || VOICE_TONE_PRESETS[1];
                     return (
                       <button
                         key={spk.id}
@@ -127,10 +118,7 @@ export const SubtitleItem: React.FC<SubtitleItemProps> = ({
                           isSelected ? `${badge} font-bold` : 'text-slate-300 hover:bg-slate-800'
                         }`}
                       >
-                        <span className="flex items-center gap-1.5">
-                          <span>{spkTone.emoji}</span>
-                          <span>{spk.name}</span>
-                        </span>
+                        <span>{spk.name}</span>
                         {isSelected && <Check className="w-3 h-3 text-current" />}
                       </button>
                     );

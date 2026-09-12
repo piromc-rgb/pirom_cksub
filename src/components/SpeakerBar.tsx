@@ -6,16 +6,9 @@ import {
   Edit2, 
   Trash2, 
   Check, 
-  X,
-  Activity
+  X
 } from 'lucide-react';
-import { 
-  SpeakerProfile, 
-  SpeakerColor, 
-  VoiceToneCategory, 
-  VoiceTonePreset, 
-  VOICE_TONE_PRESETS 
-} from '../types/subtitle';
+import { SpeakerProfile, SpeakerColor } from '../types/subtitle';
 
 interface SpeakerBarProps {
   speakers: SpeakerProfile[];
@@ -27,8 +20,6 @@ interface SpeakerBarProps {
   onUpdateSpeaker: (id: string, updates: Partial<SpeakerProfile>) => void;
   onDeleteSpeaker: (id: string) => void;
   isVoiceActive?: boolean;
-  livePitchHz?: number;
-  detectedTone?: VoiceTonePreset;
 }
 
 export const COLOR_OPTIONS: { id: SpeakerColor; label: string; badge: string; dot: string }[] = [
@@ -46,10 +37,6 @@ export const getSpeakerBadgeClasses = (color?: SpeakerColor) => {
   return match ? match.badge : COLOR_OPTIONS[0].badge;
 };
 
-export const getSpeakerTonePreset = (tone?: VoiceToneCategory): VoiceTonePreset => {
-  return VOICE_TONE_PRESETS.find((p) => p.id === tone) || VOICE_TONE_PRESETS[1];
-};
-
 export const SpeakerBar: React.FC<SpeakerBarProps> = ({
   speakers,
   activeSpeakerId,
@@ -60,38 +47,28 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
   onUpdateSpeaker,
   onDeleteSpeaker,
   isVoiceActive = false,
-  livePitchHz = 0,
-  detectedTone,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState<SpeakerColor>('cyan');
-  const [editTone, setEditTone] = useState<VoiceToneCategory>('young-male');
 
   const handleStartEdit = (speaker: SpeakerProfile, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingId(speaker.id);
     setEditName(speaker.name);
     setEditColor(speaker.color);
-    setEditTone(speaker.toneCategory || 'young-male');
   };
 
   const handleSaveEdit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (editingId && editName.trim()) {
-      const preset = VOICE_TONE_PRESETS.find((p) => p.id === editTone);
-      onUpdateSpeaker(editingId, {
-        name: editName.trim(),
-        color: editColor,
-        toneCategory: editTone,
-        pitchBaseline: preset?.baselinePitch || 140,
-      });
+      onUpdateSpeaker(editingId, { name: editName.trim(), color: editColor });
       setEditingId(null);
     }
   };
 
   return (
-    <div className="w-full bg-[#0a0f1b]/90 border border-slate-800/80 rounded-2xl px-4 py-2.5 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    <div className="w-full bg-[#0a0f1b]/85 border border-slate-800/80 rounded-2xl px-4 py-2.5 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
       {/* Left: Speaker chips list */}
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 shrink-0 mr-1">
@@ -102,7 +79,6 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
         {speakers.map((spk) => {
           const isActive = spk.id === activeSpeakerId;
           const badgeClass = getSpeakerBadgeClasses(spk.color);
-          const tone = getSpeakerTonePreset(spk.toneCategory);
 
           return (
             <div
@@ -114,7 +90,7 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
                   : 'bg-slate-900/80 hover:bg-slate-800/90 text-slate-400 hover:text-slate-200 border-slate-800'
               }`}
             >
-              {/* Active voice indicator */}
+              {/* Active mic wave / voice indicator */}
               {isActive && isVoiceActive ? (
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -126,16 +102,10 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
 
               <span>{spk.name}</span>
 
-              {/* Tone Category Tag */}
-              <span className="text-[10px] opacity-75 bg-black/25 px-1.5 py-0.5 rounded flex items-center gap-1">
-                <span>{tone.emoji}</span>
-                <span className="hidden md:inline">{tone.shortLabel}</span>
-              </span>
-
               {/* Edit button */}
               <button
                 onClick={(e) => handleStartEdit(spk, e)}
-                title="แก้ไขชื่อ สี และโทนเสียงของผู้พูด"
+                title="แก้ไขชื่อและสีผู้พูด"
                 className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-white rounded transition-opacity"
               >
                 <Edit2 className="w-3 h-3" />
@@ -169,19 +139,8 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
         </button>
       </div>
 
-      {/* Right: Live Pitch Monitor & Auto Diarization Toggle */}
+      {/* Right: Auto Diarization Toggle */}
       <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800/60">
-        {/* Live Detected Tone Readout */}
-        {isVoiceActive && livePitchHz > 0 && detectedTone && (
-          <div className="hidden lg:flex items-center gap-1.5 text-xs bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-xl text-slate-300 animate-fade-in">
-            <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span className="font-mono text-cyan-300 font-medium">{livePitchHz} Hz</span>
-            <span className="text-slate-500">•</span>
-            <span>{detectedTone.emoji} {detectedTone.shortLabel}</span>
-          </div>
-        )}
-
-        {/* Auto Diarization Switch */}
         <button
           onClick={onToggleAutoDiarize}
           className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-medium border transition-all ${
@@ -189,24 +148,24 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
               ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm'
               : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-slate-200'
           }`}
-          title="วิเคราะห์ระดับเสียง (Voice Pitch F0) และแยกโทนเสียง ชาย/หญิง/เด็ก อัตโนมัติ"
+          title="วิเคราะห์ระดับเสียง (Voice Pitch) และจังหวะเว้นวรรคเพื่อสลับผู้พูดอัตโนมัติ"
         >
           <Sparkles className={`w-3.5 h-3.5 ${autoDiarize ? 'text-indigo-400' : 'text-slate-500'}`} />
-          <span>แยกตามโทนเสียง:</span>
+          <span>ตรวจจับอัตโนมัติ:</span>
           <span className={`font-semibold ${autoDiarize ? 'text-emerald-300' : 'text-slate-500'}`}>
-            {autoDiarize ? 'เปิด (Auto Tone)' : 'ปิด (Manual)'}
+            {autoDiarize ? 'เปิด (Auto)' : 'ปิด (Manual)'}
           </span>
         </button>
       </div>
 
       {/* Inline Edit Modal / Popover */}
       {editingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div className="bg-[#0f1523] border border-slate-700/80 rounded-2xl p-4 sm:p-5 w-full max-w-md shadow-2xl animate-fade-in space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-[#0f1523] border border-slate-700/80 rounded-2xl p-4 sm:p-5 w-full max-w-sm shadow-2xl animate-fade-in space-y-3.5">
+            <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold text-white flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-indigo-400" />
-                <span>แก้ไขข้อมูลผู้พูดและโทนเสียง</span>
+                <span>แก้ไขข้อมูลผู้พูด</span>
               </h4>
               <button
                 onClick={() => setEditingId(null)}
@@ -216,7 +175,6 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
               </button>
             </div>
 
-            {/* Speaker Name */}
             <div>
               <label className="text-xs text-slate-400 block mb-1">ชื่อผู้พูด (Speaker Name)</label>
               <input
@@ -233,42 +191,6 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
               />
             </div>
 
-            {/* Voice Tone Preset Selector */}
-            <div>
-              <label className="text-xs text-slate-400 block mb-1.5 flex items-center justify-between">
-                <span>โทนเสียงสำหรับการตรวจจับ (Voice Tone Profile)</span>
-                <span className="text-[11px] text-cyan-400 font-mono">
-                  {VOICE_TONE_PRESETS.find((p) => p.id === editTone)?.baselinePitch} Hz
-                </span>
-              </label>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {VOICE_TONE_PRESETS.map((preset) => {
-                  const isSelected = editTone === preset.id;
-                  return (
-                    <div
-                      key={preset.id}
-                      onClick={() => setEditTone(preset.id)}
-                      className={`p-2 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between ${
-                        isSelected
-                          ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-sm ring-1 ring-indigo-500/50'
-                          : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{preset.emoji}</span>
-                        <div>
-                          <p className="font-semibold text-slate-200">{preset.name}</p>
-                          <p className="text-[11px] text-slate-500">{preset.description}</p>
-                        </div>
-                      </div>
-                      {isSelected && <Check className="w-4 h-4 text-cyan-400 shrink-0" />}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Speaker Badge Color */}
             <div>
               <label className="text-xs text-slate-400 block mb-1.5">สีประจำตัว (Speaker Color)</label>
               <div className="grid grid-cols-4 gap-2">
@@ -290,8 +212,7 @@ export const SpeakerBar: React.FC<SpeakerBarProps> = ({
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800/80">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setEditingId(null)}

@@ -27,16 +27,7 @@ import {
   ExportModal 
 } from './components/ExportModal';
 
-import { 
-  SubtitleSegment, 
-  AudioInputMode, 
-  SpeakerProfile, 
-  SpeakerColor, 
-  VoiceToneCategory,
-  VoiceTonePreset,
-  VOICE_TONE_PRESETS,
-  DEFAULT_SPEAKERS 
-} from './types/subtitle';
+import { SubtitleSegment, AudioInputMode, SpeakerProfile, SpeakerColor, DEFAULT_SPEAKERS } from './types/subtitle';
 import { AppSettings, DEFAULT_SETTINGS } from './types/settings';
 import { MeetingSpeechRecognizer } from './services/speechRecognition';
 import { translateEnglishToThai } from './services/translationService';
@@ -64,8 +55,6 @@ export const App: React.FC = () => {
   const [activeSpeakerId, setActiveSpeakerId] = useState<string>('spk_1');
   const [autoDiarize, setAutoDiarize] = useState<boolean>(true);
   const [isVoiceActive, setIsVoiceActive] = useState<boolean>(false);
-  const [livePitchHz, setLivePitchHz] = useState<number>(0);
-  const [detectedTone, setDetectedTone] = useState<VoiceTonePreset | undefined>(undefined);
   const activeSpeakerRef = useRef<SpeakerProfile>(DEFAULT_SPEAKERS[0]);
 
   // Keep activeSpeakerRef in sync
@@ -100,6 +89,7 @@ export const App: React.FC = () => {
   const meetingStartTimeRef = useRef<number>(Date.now());
   const interimThaiRef = useRef<string>('');
   const interimReqIdRef = useRef<number>(0);
+  const latestInterimEnglishRef = useRef<string>('');
 
   // Save settings
   const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
@@ -120,14 +110,8 @@ export const App: React.FC = () => {
       onSpeakerChanged: (newSpkId) => {
         setActiveSpeakerId(newSpkId);
       },
-      onVoiceActivity: (isSpeaking, pitchHz, _volume, tone) => {
+      onVoiceActivity: (isSpeaking) => {
         setIsVoiceActive(isSpeaking);
-        if (isSpeaking) {
-          setLivePitchHz(pitchHz);
-          setDetectedTone(tone);
-        } else {
-          setLivePitchHz(0);
-        }
       },
     });
 
@@ -195,17 +179,13 @@ export const App: React.FC = () => {
     const nextNum = speakers.length + 1;
     const colors: SpeakerColor[] = ['cyan', 'purple', 'emerald', 'amber', 'rose', 'indigo', 'blue'];
     const nextColor = colors[speakers.length % colors.length];
-
-    const toneSequence: VoiceToneCategory[] = ['young-male', 'young-female', 'mature-male', 'mature-female', 'child'];
-    const nextTone = toneSequence[speakers.length % toneSequence.length];
-    const presetInfo = VOICE_TONE_PRESETS.find((p) => p.id === nextTone) || VOICE_TONE_PRESETS[0];
+    const baselinePitch = 120 + ((speakers.length * 55) % 190);
 
     const newSpk: SpeakerProfile = {
       id: `spk_${Date.now()}`,
       name: `Speaker ${nextNum}`,
       color: nextColor,
-      toneCategory: nextTone,
-      pitchBaseline: presetInfo.baselinePitch,
+      pitchBaseline: baselinePitch,
     };
 
     setSpeakers((prev) => {
@@ -260,11 +240,9 @@ export const App: React.FC = () => {
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
 
+    latestInterimEnglishRef.current = englishText;
     const currentThai = interimThaiRef.current;
     const activeSpk = activeSpeakerRef.current;
-    const tonePreset = activeSpk.toneCategory
-      ? VOICE_TONE_PRESETS.find((p) => p.id === activeSpk.toneCategory)
-      : undefined;
 
     const interimObj: SubtitleSegment = {
       id: 'interim',
@@ -272,7 +250,6 @@ export const App: React.FC = () => {
       rawTimeMs: Date.now() - meetingStartTimeRef.current,
       speaker: activeSpk.name,
       speakerId: activeSpk.id,
-      speakerTone: tonePreset ? `${tonePreset.emoji} ${tonePreset.shortLabel}` : undefined,
       englishText,
       thaiText: currentThai,
       isFinal: false,
@@ -304,49 +281,66 @@ export const App: React.FC = () => {
   };
 
   // Handle Confirmed Sentence Finalization
-  const handleFinalSpeech = async (englishText: string, confidence: number) => {
+  const handleFinalSpeech = (englishText: string, confidence: number) => {
+    const clean = englishText.trim();
+    if (!clean) return;
+
     if (interimTimeoutRef.current) {
       clearTimeout(interimTimeoutRef.current);
     }
     interimReqIdRef.current++;
 
-    const clean = englishText.trim();
-    if (!clean) return;
-
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
     const activeSpk = activeSpeakerRef.current;
-    const tonePreset = activeSpk.toneCategory
-      ? VOICE_TONE_PRESETS.find((p) => p.id === activeSpk.toneCategory)
-      : undefined;
 
-    let thaiText = await translateEnglishToThai(clean, {
-      engine: settings.translationEngine,
-      geminiKey: settings.geminiApiKey,
-      openaiKey: settings.openaiApiKey,
-      customTerms: settings.customTerms,
-    });
-
-    if (!thaiText && interimThaiRef.current) {
-      thaiText = interimThaiRef.current;
-    }
+    // Use current translated Thai text immediately to ensure 0ms latency and NO disappearing gap!
+    const initialThai = interimThaiRef.current || '';
+    const segmentId = Date.now().toString();
 
     const newSegment: SubtitleSegment = {
-      id: Date.now().toString(),
+      id: segmentId,
       timestamp: timeStr,
       rawTimeMs: Date.now() - meetingStartTimeRef.current,
       speaker: activeSpk.name,
       speakerId: activeSpk.id,
-      speakerTone: tonePreset ? `${tonePreset.emoji} ${tonePreset.shortLabel}` : undefined,
       englishText: clean,
-      thaiText: thaiText || '',
+      thaiText: initialThai,
       isFinal: true,
       confidence,
     };
 
+    // 1. Immediately commit new finalized segment to subtitles list
     setSubtitles((prev) => [...prev, newSegment]);
-    interimThaiRef.current = '';
-    setCurrentInterim(null);
+
+    // 2. Only clear interim if it hasn't already begun streaming the next sentence!
+    setCurrentInterim((prev) => {
+      if (!prev) return null;
+      // If the current interim already contains NEW words different from this finalized sentence, PRESERVE IT!
+      if (prev.englishText !== clean && !clean.endsWith(prev.englishText)) {
+        return prev;
+      }
+      return null;
+    });
+
+    if (latestInterimEnglishRef.current === clean) {
+      latestInterimEnglishRef.current = '';
+      interimThaiRef.current = '';
+    }
+
+    // 3. In background: refine the Thai translation if needed (without freezing the UI)
+    translateEnglishToThai(clean, {
+      engine: settings.translationEngine,
+      geminiKey: settings.geminiApiKey,
+      openaiKey: settings.openaiApiKey,
+      customTerms: settings.customTerms,
+    }).then((refinedThai) => {
+      if (refinedThai && refinedThai.trim() && refinedThai.trim() !== initialThai) {
+        setSubtitles((prev) =>
+          prev.map((s) => (s.id === segmentId ? { ...s, thaiText: refinedThai.trim() } : s))
+        );
+      }
+    }).catch(() => {});
   };
 
   // Toggle listening
@@ -487,8 +481,6 @@ export const App: React.FC = () => {
           onUpdateSpeaker={handleUpdateSpeaker}
           onDeleteSpeaker={handleDeleteSpeaker}
           isVoiceActive={isVoiceActive}
-          livePitchHz={livePitchHz}
-          detectedTone={detectedTone}
         />
 
         {/* Live Subtitle Stream Component */}
