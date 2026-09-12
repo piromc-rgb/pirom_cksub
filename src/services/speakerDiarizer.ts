@@ -59,6 +59,7 @@ export class SpeakerDiarizer {
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.sourceNode.connect(this.analyser);
 
+      // Analyser only - DO NOT connect to audioContext.destination to prevent any audio feedback or echo
       this.lastVoicedTimestamp = Date.now();
       this.loop();
     } catch (e) {

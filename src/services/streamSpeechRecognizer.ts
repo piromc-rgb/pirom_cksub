@@ -52,7 +52,7 @@ export class StreamSpeechRecognizer {
       this.audioContext = new AudioCtx();
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
 
-      // Analyser for Voice Activity Detection (VAD) - do not connect to destination to avoid echo!
+      // Analyser for Voice Activity Detection (VAD) - strictly NO destination connection to prevent any echo
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 1024;
       this.sourceNode.connect(this.analyser);

@@ -43,7 +43,7 @@ export const App: React.FC = () => {
   const [subtitles, setSubtitles] = useState<SubtitleSegment[]>([]);
   const [currentInterim, setCurrentInterim] = useState<SubtitleSegment | null>(null);
   const [isListening, setIsListening] = useState(false);
-  const [audioMode, setAudioMode] = useState<AudioInputMode>('headphones'); // Default to headphones/tab for online meetings!
+  const [audioMode, setAudioMode] = useState<AudioInputMode>('mic'); // Default to direct microphone mode
   const [isPipActive, setIsPipActive] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
