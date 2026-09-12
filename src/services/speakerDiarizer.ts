@@ -1,19 +1,23 @@
-import { SpeakerProfile } from '../types/subtitle';
+import { SpeakerProfile, VoiceTonePreset, detectVoiceTonePreset } from '../types/subtitle';
 
 export interface DiarizerCallbacks {
   onSpeakerChanged: (speakerId: string) => void;
-  onVoiceActivity?: (isSpeaking: boolean, pitchHz: number, volume: number) => void;
+  onVoiceActivity?: (
+    isSpeaking: boolean,
+    pitchHz: number,
+    volume: number,
+    detectedTone?: VoiceTonePreset
+  ) => void;
 }
 
 export class SpeakerDiarizer {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private lowpassNode: BiquadFilterNode | null = null;
   private animFrameId: number | null = null;
 
   private speakers: SpeakerProfile[] = [];
-  private activeSpeakerId: string = 'spk_male';
+  private activeSpeakerId: string = 'spk_1';
   private callbacks: DiarizerCallbacks;
   private isEnabled: boolean = true;
 
@@ -21,11 +25,10 @@ export class SpeakerDiarizer {
   private bufferSize = 2048;
   private timeBuffer: Float32Array = new Float32Array(this.bufferSize);
 
-  // Conversational state & gender voting history
-  private recentPitchBuffer: number[] = [];
-  private recentGenderVotes: string[] = [];
-  private lastVoicedTime: number = 0;
-  private lastAnalysisTime: number = 0;
+  // Pitch tracking & conversational state
+  private recentPitches: number[] = [];
+  private lastVoicedTimestamp: number = 0;
+  private silenceDurationMs: number = 0;
 
   constructor(speakers: SpeakerProfile[], callbacks: DiarizerCallbacks) {
     this.speakers = speakers;
@@ -59,22 +62,9 @@ export class SpeakerDiarizer {
       this.analyser.fftSize = this.bufferSize;
 
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
+      this.sourceNode.connect(this.analyser);
 
-      // Low-pass filter (350 Hz) keeps the fundamental frequency F0 (80-300 Hz)
-      // and eliminates upper harmonics / formants that cause octave errors
-      this.lowpassNode = this.audioContext.createBiquadFilter();
-      this.lowpassNode.type = 'lowpass';
-      this.lowpassNode.frequency.value = 350;
-      this.lowpassNode.Q.value = 0.7;
-
-      this.sourceNode.connect(this.lowpassNode);
-      this.lowpassNode.connect(this.analyser);
-
-      // Analyser only - DO NOT connect to audioContext.destination to prevent any audio feedback or echo
-      this.lastVoicedTime = Date.now();
-      this.lastAnalysisTime = 0;
-      this.recentPitchBuffer = [];
-      this.recentGenderVotes = [];
+      this.lastVoicedTimestamp = Date.now();
       this.loop();
     } catch (e) {
       console.warn('SpeakerDiarizer init error:', e);
@@ -92,12 +82,6 @@ export class SpeakerDiarizer {
       } catch (e) {}
       this.sourceNode = null;
     }
-    if (this.lowpassNode) {
-      try {
-        this.lowpassNode.disconnect();
-      } catch (e) {}
-      this.lowpassNode = null;
-    }
     if (this.audioContext && this.audioContext.state !== 'closed') {
       try {
         this.audioContext.close();
@@ -110,64 +94,42 @@ export class SpeakerDiarizer {
   private loop = () => {
     if (!this.analyser) return;
 
-    const now = Date.now();
-    // Throttle autocorrelation calculation to run every 80ms
-    if (now - this.lastAnalysisTime < 80) {
-      this.animFrameId = requestAnimationFrame(this.loop);
-      return;
-    }
-    this.lastAnalysisTime = now;
-
     (this.analyser as any).getFloatTimeDomainData(this.timeBuffer);
 
-    const { rms, pitch } = this.detectPitchAndEnergy(this.timeBuffer, this.audioContext?.sampleRate || 44100);
+    const now = Date.now();
+    const { rms, pitch } = this.detectPitchAndEnergy(
+      this.timeBuffer,
+      this.audioContext?.sampleRate || 44100
+    );
 
-    const isSpeaking = rms > 0.01 && (pitch > 65 || rms > 0.025);
+    const isSpeaking = rms > 0.018 && pitch > 65 && pitch < 450;
+    const detectedTone = isSpeaking ? detectVoiceTonePreset(pitch) : undefined;
 
     if (this.callbacks.onVoiceActivity) {
-      this.callbacks.onVoiceActivity(isSpeaking, pitch, rms);
+      this.callbacks.onVoiceActivity(isSpeaking, Math.round(pitch), rms, detectedTone);
     }
 
     if (isSpeaking) {
-      this.lastVoicedTime = now;
+      this.silenceDurationMs = now - this.lastVoicedTimestamp;
+      this.lastVoicedTimestamp = now;
 
-      if (pitch >= 75 && pitch <= 360) {
-        const detectedGenderId = this.classifyGender(pitch);
-        this.recentPitchBuffer.push(pitch);
-        this.recentGenderVotes.push(detectedGenderId);
-
-        if (this.recentGenderVotes.length > 5) {
-          this.recentGenderVotes.shift();
-        }
-        if (this.recentPitchBuffer.length > 5) {
-          this.recentPitchBuffer.shift();
+      if (this.isEnabled && this.speakers.length > 1) {
+        this.recentPitches.push(pitch);
+        if (this.recentPitches.length > 8) {
+          this.recentPitches.shift();
         }
 
-        // Evaluate votes over last few frames for smooth, reliable switching
-        if (this.isEnabled && this.speakers.length > 1 && this.recentGenderVotes.length >= 2) {
-          const maleSpeaker = this.speakers.find((s) => s.gender === 'male' || s.id === 'spk_male') || this.speakers[0];
-          const femaleSpeaker = this.speakers.find((s) => s.gender === 'female' || s.id === 'spk_female') || this.speakers[1];
+        // If after conversational pause (> 1000ms) or significant vocal register shift
+        if (this.silenceDurationMs > 1000 && this.recentPitches.length >= 3) {
+          const sorted = [...this.recentPitches].sort((a, b) => a - b);
+          const medianPitch = sorted[Math.floor(sorted.length / 2)];
+          const detectedSpeakerId = this.classifySpeaker(medianPitch);
 
-          let maleCount = 0;
-          let femaleCount = 0;
-          for (const vote of this.recentGenderVotes) {
-            if (vote === maleSpeaker.id) maleCount++;
-            else if (femaleSpeaker && vote === femaleSpeaker.id) femaleCount++;
-          }
-
-          const consensusId = maleCount >= femaleCount ? maleSpeaker.id : (femaleSpeaker ? femaleSpeaker.id : maleSpeaker.id);
-
-          if (consensusId && consensusId !== this.activeSpeakerId) {
-            this.activeSpeakerId = consensusId;
-            this.callbacks.onSpeakerChanged(consensusId);
+          if (detectedSpeakerId && detectedSpeakerId !== this.activeSpeakerId) {
+            this.activeSpeakerId = detectedSpeakerId;
+            this.callbacks.onSpeakerChanged(detectedSpeakerId);
           }
         }
-      }
-    } else {
-      // Pause
-      if (now - this.lastVoicedTime > 400) {
-        this.recentGenderVotes = [];
-        this.recentPitchBuffer = [];
       }
     }
 
@@ -175,22 +137,35 @@ export class SpeakerDiarizer {
   };
 
   /**
-   * Classify whether pitch belongs to Male or Female voice profile
+   * Find closest speaker profile matching fundamental pitch F0 & tone category
    */
-  private classifyGender(pitchHz: number): string {
-    const maleSpeaker = this.speakers.find((s) => s.gender === 'male' || s.id === 'spk_male') || this.speakers[0];
-    const femaleSpeaker = this.speakers.find((s) => s.gender === 'female' || s.id === 'spk_female') || this.speakers[1] || this.speakers[0];
+  public classifySpeaker(pitchHz: number): string | null {
+    if (this.speakers.length <= 1) return null;
 
-    // Standard acoustic separation threshold between adult male and female speech: 165 Hz
-    // Male F0: 85 - 160 Hz (center ~120 Hz)
-    // Female F0: 175 - 265 Hz (center ~215 Hz)
-    const threshold = 165;
+    const detectedTone = detectVoiceTonePreset(pitchHz);
+    let bestId: string = this.speakers[0].id;
+    let minScore = Infinity;
 
-    return pitchHz < threshold ? maleSpeaker.id : femaleSpeaker.id;
+    for (const spk of this.speakers) {
+      const baseline = spk.pitchBaseline || 150;
+      let diff = Math.abs(pitchHz - baseline);
+
+      // If speaker has a toneCategory matching the detected tone, give affinity bonus
+      if (spk.toneCategory && spk.toneCategory === detectedTone.id) {
+        diff = diff * 0.45; // 55% distance reduction bonus for exact tone category match!
+      }
+
+      if (diff < minScore) {
+        minScore = diff;
+        bestId = spk.id;
+      }
+    }
+
+    return bestId;
   }
 
   /**
-   * Normalized cross-correlation pitch detection
+   * Time-domain autocorrelation pitch detection
    */
   private detectPitchAndEnergy(buffer: any, sampleRate: number): { rms: number; pitch: number } {
     let sumSquares = 0;
@@ -199,34 +174,31 @@ export class SpeakerDiarizer {
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
 
-    if (rms < 0.008) {
+    if (rms < 0.015) {
       return { rms, pitch: 0 };
     }
 
-    // Autocorrelation within human vocal range (75Hz - 380Hz)
-    const minPeriod = Math.floor(sampleRate / 380);
-    const maxPeriod = Math.floor(sampleRate / 75);
+    // Autocorrelation within human vocal range (65Hz - 460Hz)
+    const minPeriod = Math.floor(sampleRate / 460);
+    const maxPeriod = Math.floor(sampleRate / 65);
 
-    let maxNormR = 0;
+    let bestR = 0;
     let bestPeriod = -1;
 
     for (let period = minPeriod; period <= maxPeriod; period++) {
       let r = 0;
-      const count = buffer.length - period;
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < buffer.length - period; i++) {
         r += buffer[i] * buffer[i + period];
       }
-      const normR = r / count;
-      if (normR > maxNormR) {
-        maxNormR = normR;
+      if (r > bestR) {
+        bestR = r;
         bestPeriod = period;
       }
     }
 
-    const meanSquare = sumSquares / buffer.length;
     let pitch = 0;
-    if (bestPeriod > 0 && maxNormR > 0.22 * meanSquare) {
-      pitch = Math.round(sampleRate / bestPeriod);
+    if (bestPeriod > 0 && bestR > 0.3 * sumSquares) {
+      pitch = sampleRate / bestPeriod;
     }
 
     return { rms, pitch };

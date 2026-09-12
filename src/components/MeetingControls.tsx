@@ -6,9 +6,7 @@ import {
   Laptop, 
   Info,
   Zap,
-  Trash2,
-  Headphones,
-  HelpCircle
+  Trash2
 } from 'lucide-react';
 import { AudioInputMode } from '../types/subtitle';
 import { AudioVisualizer } from './AudioVisualizer';
@@ -21,7 +19,6 @@ interface MeetingControlsProps {
   onClearTranscript: () => void;
   subtitleCount: number;
   activeSpeaker?: string;
-  onOpenHeadphoneGuide?: () => void;
 }
 
 export const MeetingControls: React.FC<MeetingControlsProps> = ({
@@ -32,7 +29,6 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
   onClearTranscript,
   subtitleCount,
   activeSpeaker,
-  onOpenHeadphoneGuide,
 }) => {
   return (
     <div className="w-full bg-[#0d121e]/90 border border-slate-800/80 rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 shadow-xl shadow-black/40 backdrop-blur-md">
@@ -95,7 +91,7 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
             }`}
           >
             <Mic className="w-3.5 h-3.5" />
-            <span>ไมโครโฟน (Mic)</span>
+            <span>ไมโครโฟน (Microphone)</span>
           </button>
 
           <button
@@ -107,30 +103,8 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
             }`}
           >
             <Laptop className="w-3.5 h-3.5" />
-            <span>เสียงแท็บการประชุม (Tab)</span>
+            <span>เสียงแท็บการประชุม (Meet / Zoom / Teams)</span>
           </button>
-
-          <button
-            onClick={() => onChangeAudioMode('headphones')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              audioMode === 'headphones'
-                ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-cyan-300'
-            }`}
-          >
-            <Headphones className="w-3.5 h-3.5 text-cyan-300" />
-            <span>หูฟัง (Headphones)</span>
-          </button>
-
-          {onOpenHeadphoneGuide && (
-            <button
-              onClick={onOpenHeadphoneGuide}
-              title="คู่มือการใช้งานร่วมกับหูฟัง (Headphone Guide)"
-              className="p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 rounded-lg transition-colors ml-0.5"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
 
         {/* Right: Latency & Clear */}
@@ -161,25 +135,6 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
           <div>
             <span className="font-semibold text-cyan-300">เคล็ดลับการจับเสียง Google Meet / Zoom / YouTube:</span> เมื่อกดเริ่มแปล ให้เลือกแท็บเบราว์เซอร์ที่เปิดการประชุมอยู่ แล้วติ๊กเลือก <strong>"แชร์เสียงของแท็บ (Share tab audio)"</strong> ระบบจะดักฟังเสียงของผู้ร่วมประชุมภาษาอังกฤษและแปลเป็นซับไตเติลภาษาไทยให้สดทันที
           </div>
-        </div>
-      )}
-
-      {audioMode === 'headphones' && (
-        <div className="mt-3.5 text-xs text-cyan-200/90 bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-3 flex items-center justify-between gap-2.5">
-          <div className="flex items-start gap-2.5">
-            <Headphones className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold text-cyan-300">โหมดใช้งานร่วมกับหูฟัง (Headphone Audio Pass-Through):</span> ระบบจะดักฟังเสียงภาษาอังกฤษจากในแท็บการประชุมตรงๆ พร้อมส่งต่อสัญญาณเสียงไปยังหูฟังของคุณตามปกติ (ไม่โดน Mute)
-            </div>
-          </div>
-          {onOpenHeadphoneGuide && (
-            <button
-              onClick={onOpenHeadphoneGuide}
-              className="underline text-cyan-300 hover:text-white font-medium shrink-0 ml-2 cursor-pointer"
-            >
-              ดูวิธีตั้งค่า &gt;
-            </button>
-          )}
         </div>
       )}
     </div>
