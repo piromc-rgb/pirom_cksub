@@ -19,8 +19,6 @@ export interface AppSettings {
   customTerms: TerminologyRule[];
   geminiApiKey?: string;
   openaiApiKey?: string;
-  deepgramApiKey?: string;
-  sttEngine: 'web-speech' | 'deepgram-nova3';
   translationEngine: 'free-fast' | 'gemini' | 'openai';
 }
 
@@ -40,7 +38,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
     { id: '5', source: 'backend', target: 'ระบบหลังบ้าน (Backend)' },
     { id: '6', source: 'deploy', target: 'นำระบบขึ้นใช้งานจริง (Deploy)' },
   ],
-  sttEngine: 'web-speech',
-  deepgramApiKey: '',
   translationEngine: 'free-fast',
 };

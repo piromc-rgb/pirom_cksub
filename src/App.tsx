@@ -31,7 +31,6 @@ import {
 import { SubtitleSegment, AudioInputMode, SpeakerProfile, SpeakerColor, DEFAULT_SPEAKERS } from './types/subtitle';
 import { AppSettings, DEFAULT_SETTINGS } from './types/settings';
 import { MeetingSpeechRecognizer } from './services/speechRecognition';
-import { DeepgramNova3Recognizer } from './services/deepgramNova3';
 import {
   translateEnglishToThai,
   isFreeTranslationRateLimited,
@@ -88,7 +87,6 @@ export const App: React.FC = () => {
 
   // Services references
   const speechRecognizerRef = useRef<MeetingSpeechRecognizer | null>(null);
-  const deepgramRecognizerRef = useRef<DeepgramNova3Recognizer | null>(null);
   const speakerDiarizerRef = useRef<SpeakerDiarizer | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const pipManagerRef = useRef<SubtitlePiPManager | null>(null);
@@ -190,7 +188,6 @@ export const App: React.FC = () => {
 
     return () => {
       speechRecognizerRef.current?.stop();
-      deepgramRecognizerRef.current?.stop();
     };
   }, [audioMode, settings]);
 
@@ -506,7 +503,6 @@ export const App: React.FC = () => {
     if (isListening) {
       // Stop
       speechRecognizerRef.current?.stop();
-      deepgramRecognizerRef.current?.stop();
       speakerDiarizerRef.current?.stop();
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -518,17 +514,6 @@ export const App: React.FC = () => {
     } else {
       // Start
       meetingStartTimeRef.current = Date.now();
-
-      // Check if Deepgram Nova-3 is selected but key is missing
-      if (settings.sttEngine === 'deepgram-nova3') {
-        if (!settings.deepgramApiKey?.trim()) {
-          alert('กรุณากรอก Deepgram API Key ในการตั้งค่า (Settings) เพื่อใช้งานโมเดล Nova-3');
-          setIsSettingsOpen(true);
-          return;
-        }
-      }
-
-      let activeStream: MediaStream | null = null;
 
       if (audioMode === 'tab') {
         try {
@@ -542,7 +527,6 @@ export const App: React.FC = () => {
             stream.getVideoTracks().forEach((track) => track.stop());
 
             if (stream.getAudioTracks().length > 0) {
-              activeStream = stream;
               speakerDiarizerRef.current?.start(stream);
             }
           }
@@ -555,7 +539,6 @@ export const App: React.FC = () => {
           if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioStreamRef.current = stream;
-            activeStream = stream;
             speakerDiarizerRef.current?.start(stream);
           }
         } catch (e) {
@@ -563,42 +546,8 @@ export const App: React.FC = () => {
         }
       }
 
-      if (settings.sttEngine === 'deepgram-nova3' && settings.deepgramApiKey?.trim()) {
-        if (!activeStream) {
-          try {
-            activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioStreamRef.current = activeStream;
-          } catch (e) {
-            alert('ไม่สามารถเปิดใช้งานไมโครโฟนหรือสัญญาณเสียงได้');
-            return;
-          }
-        }
-
-        deepgramRecognizerRef.current = new DeepgramNova3Recognizer(
-          settings.deepgramApiKey,
-          activeStream,
-          {
-            onInterim: (text, spkId) => {
-              handleInterimSpeech(text, spkId);
-            },
-            onFinal: (text, confidence, spkId) => {
-              handleFinalSpeech(text, confidence, spkId);
-            },
-            onError: (err) => {
-              console.warn('Deepgram Nova-3 error:', err);
-              alert(err);
-            },
-            onStatusChange: (listening) => {
-              setIsListening(listening);
-            },
-          }
-        );
-        deepgramRecognizerRef.current.start();
-      } else {
-        // Free Web Speech API
-        speechRecognizerRef.current?.start();
-        setIsListening(true);
-      }
+      speechRecognizerRef.current?.start();
+      setIsListening(true);
     }
   };
 
@@ -686,7 +635,6 @@ export const App: React.FC = () => {
           onClearTranscript={handleClearTranscript}
           subtitleCount={subtitles.length}
           activeSpeaker={activeSpeakerProfile?.name}
-          sttEngine={settings.sttEngine}
         />
 
         {/* Multi-Speaker Management Bar */}

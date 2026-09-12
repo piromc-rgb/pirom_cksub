@@ -309,86 +309,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 3: Engine */}
           {activeTab === 'engine' && (
             <div className="space-y-5">
-              {/* SECTION 1: Speech-to-Text (STT) Engine */}
+              {/* Translation Engine */}
               <div>
                 <label className="block text-xs font-semibold text-slate-200 mb-1">
-                  1. โมเดลถอดเสียงพูด (Speech-to-Text Engine)
-                </label>
-                <p className="text-[11px] text-slate-400 mb-2.5">
-                  เลือกเอนจินสำหรับแปลงเสียงพูดภาษาอังกฤษเป็นข้อความ Real-time
-                </p>
-                <div className="space-y-2">
-                  {/* Option 1: Web Speech API */}
-                  <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-800 bg-slate-900/50 cursor-pointer hover:border-slate-700 transition-colors">
-                    <input
-                      type="radio"
-                      name="sttEngine"
-                      value="web-speech"
-                      checked={currentSettings.sttEngine === 'web-speech'}
-                      onChange={() => setCurrentSettings({ ...currentSettings, sttEngine: 'web-speech' })}
-                      className="mt-1"
-                    />
-                    <div>
-                      <div className="text-xs font-semibold text-white flex items-center gap-2">
-                        <span>Web Speech API (ใช้งานฟรี / ไม่ต้องใช้ API Key)</span>
-                        <span className="px-2 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-300 rounded">ฟรีในตัวเครื่อง</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        ระบบแปลงเสียงพูดที่มีในตัวเบราว์เซอร์ Chrome / Edge / Safari ใช้งานได้ทันทีไม่ต้องตั้งค่า
-                      </p>
-                    </div>
-                  </label>
-
-                  {/* Option 2: Deepgram Nova-3 */}
-                  <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-800 bg-slate-900/50 cursor-pointer hover:border-slate-700 transition-colors">
-                    <input
-                      type="radio"
-                      name="sttEngine"
-                      value="deepgram-nova3"
-                      checked={currentSettings.sttEngine === 'deepgram-nova3'}
-                      onChange={() => setCurrentSettings({ ...currentSettings, sttEngine: 'deepgram-nova3' })}
-                      className="mt-1"
-                    />
-                    <div className="w-full">
-                      <div className="text-xs font-semibold text-white flex items-center gap-2">
-                        <span>Deepgram Nova-3 (AI-Driven Speech-to-Text)</span>
-                        <span className="px-2 py-0.5 text-[10px] bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 text-cyan-300 border border-cyan-500/30 rounded font-semibold">
-                          ✨ Nova-3 แนะนำ
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                        โมเดล Nova-3 มาตรฐานใหม่ของ AI Speech-to-Text ความเร็วสูงพิเศษ ตัดวรรคตอนแม่นยำ และแยกผู้พูดอัตโนมัติ (Diarization)
-                      </p>
-
-                      <div className="mt-2.5 space-y-1.5">
-                        <input
-                          type="password"
-                          placeholder="ระบุ Deepgram API Key ของคุณ..."
-                          value={currentSettings.deepgramApiKey || ''}
-                          onChange={(e) => setCurrentSettings({ ...currentSettings, deepgramApiKey: e.target.value })}
-                          className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                        />
-                        <div className="flex items-center justify-between text-[11px] text-slate-400">
-                          <span>โมเดล WebSocket: <code className="text-cyan-300 font-semibold">nova-3</code></span>
-                          <a
-                            href="https://console.deepgram.com/signup"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-cyan-400 hover:text-cyan-300 underline"
-                          >
-                            รับฟรี $200 เครดิตที่ deepgram.com ↗
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* SECTION 2: Translation Engine */}
-              <div className="pt-2 border-t border-slate-800/80">
-                <label className="block text-xs font-semibold text-slate-200 mb-1">
-                  2. เอนจินการแปลภาษา (Translation Engine)
+                  เอนจินการแปลภาษา (Translation Engine)
                 </label>
                 <div className="space-y-2 mt-2">
                   <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-800 bg-slate-900/50 cursor-pointer hover:border-slate-700">
