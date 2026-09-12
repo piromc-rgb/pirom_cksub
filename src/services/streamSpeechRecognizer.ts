@@ -143,7 +143,7 @@ export class StreamSpeechRecognizer {
     const rms = Math.sqrt(sum / buffer.length);
     const now = Date.now();
 
-    const isSpeakingNow = rms > 0.025;
+    const isSpeakingNow = rms > 0.012;
 
     if (isSpeakingNow) {
       if (!this.isVoiceActive) {

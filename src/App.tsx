@@ -160,15 +160,19 @@ export const App: React.FC = () => {
     }
   }, [currentInterim, subtitles]);
 
+  // Handlers ref so speech recognizers are never stopped or torn down during settings changes
+  const handleInterimSpeechRef = useRef<(text: string) => void>(() => {});
+  const handleFinalSpeechRef = useRef<(text: string, confidence: number) => void>(() => {});
+
   // Initialize Stream Speech Recognizer (for direct digital headphone/tab audio)
   useEffect(() => {
     streamSpeechRecognizerRef.current = new StreamSpeechRecognizer(
       {
         onInterim: (text: string) => {
-          handleInterimSpeech(text);
+          handleInterimSpeechRef.current(text);
         },
         onFinal: (text: string, confidence: number) => {
-          handleFinalSpeech(text, confidence);
+          handleFinalSpeechRef.current(text, confidence);
         },
         onError: (err: string) => {
           console.warn('Stream Speech Recognizer notice:', err);
@@ -180,23 +184,30 @@ export const App: React.FC = () => {
       {
         geminiApiKey: settings.geminiApiKey,
         openaiApiKey: settings.openaiApiKey,
-        enablePassThrough: true,
       }
     );
 
     return () => {
       streamSpeechRecognizerRef.current?.stop();
     };
+  }, []);
+
+  // Keep StreamSpeechRecognizer options in sync without tearing down the recognizer
+  useEffect(() => {
+    streamSpeechRecognizerRef.current?.updateOptions({
+      geminiApiKey: settings.geminiApiKey,
+      openaiApiKey: settings.openaiApiKey,
+    });
   }, [settings.geminiApiKey, settings.openaiApiKey]);
 
-  // Initialize Microphone Speech Recognizer (Web Speech API)
+  // Initialize Microphone Speech Recognizer (Web Speech API) - runs once on mount
   useEffect(() => {
     speechRecognizerRef.current = new MeetingSpeechRecognizer({
       onInterim: (text: string) => {
-        handleInterimSpeech(text);
+        handleInterimSpeechRef.current(text);
       },
       onFinal: (text: string, confidence: number) => {
-        handleFinalSpeech(text, confidence);
+        handleFinalSpeechRef.current(text, confidence);
       },
       onError: (err: string) => {
         console.warn('Speech recognition warning:', err);
@@ -207,9 +218,9 @@ export const App: React.FC = () => {
     });
 
     return () => {
-      speechRecognizerRef.current?.stop();
+      speechRecognizerRef.current?.destroy();
     };
-  }, [audioMode, settings]);
+  }, []);
 
   // Speaker Actions
   const handleSelectSpeaker = (spkId: string) => {
@@ -361,6 +372,9 @@ export const App: React.FC = () => {
     interimThaiRef.current = '';
     setCurrentInterim(null);
   };
+
+  handleInterimSpeechRef.current = handleInterimSpeech;
+  handleFinalSpeechRef.current = handleFinalSpeech;
 
   // Toggle listening
   const handleToggleListen = async () => {

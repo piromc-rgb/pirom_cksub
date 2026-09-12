@@ -24,6 +24,7 @@ export class SpeakerDiarizer {
   private recentPitches: number[] = [];
   private lastVoicedTimestamp: number = 0;
   private silenceDurationMs: number = 0;
+  private lastAnalysisTime: number = 0;
 
   constructor(speakers: SpeakerProfile[], callbacks: DiarizerCallbacks) {
     this.speakers = speakers;
@@ -61,6 +62,7 @@ export class SpeakerDiarizer {
 
       // Analyser only - DO NOT connect to audioContext.destination to prevent any audio feedback or echo
       this.lastVoicedTimestamp = Date.now();
+      this.lastAnalysisTime = 0;
       this.loop();
     } catch (e) {
       console.warn('SpeakerDiarizer init error:', e);
@@ -90,9 +92,16 @@ export class SpeakerDiarizer {
   private loop = () => {
     if (!this.analyser) return;
 
+    const now = Date.now();
+    // Throttle CPU-intensive autocorrelation loop to every 100ms instead of 16ms (60fps)
+    if (now - this.lastAnalysisTime < 100) {
+      this.animFrameId = requestAnimationFrame(this.loop);
+      return;
+    }
+    this.lastAnalysisTime = now;
+
     (this.analyser as any).getFloatTimeDomainData(this.timeBuffer);
 
-    const now = Date.now();
     const { rms, pitch } = this.detectPitchAndEnergy(this.timeBuffer, this.audioContext?.sampleRate || 44100);
 
     const isSpeaking = rms > 0.018 && pitch > 65 && pitch < 400;
