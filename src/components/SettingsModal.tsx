@@ -418,6 +418,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span>4000ms (ปลอดภัยสุด)</span>
                 </div>
               </div>
+
+              {/* SECTION 4: Force-Flush for Long Continuous Speech */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <label className="block text-xs font-semibold text-slate-200 mb-1">
+                  4. ตัดประโยคเมื่อพูดต่อเนื่องยาว (Force-Flush Long Speech)
+                </label>
+                <p className="text-[11px] text-slate-400 mb-2.5">
+                  ถ้าพูดต่อเนื่องยาวๆ ไม่มีจังหวะเว้นวรรค ระบบจะไม่ finalize คำจนกว่าจะเจอช่วงเงียบ ทำให้เสี่ยงคำหายกลางประโยค
+                  ตั้งค่านี้เพื่อบังคับตัดข้อความปัจจุบันเป็นท่อนย่อยทุกๆ ระยะเวลาที่กำหนด ป้องกันคำหาย (แลกกับการตัดประโยคกลางคำบ้าง)
+                </p>
+                <div className="flex justify-between items-center text-xs mb-2">
+                  <span className="text-slate-300">ระยะเวลา (Force-Flush)</span>
+                  <span className="text-cyan-400 font-mono">{(currentSettings.forceFlushMs / 1000).toFixed(1)} วิ</span>
+                </div>
+                <input
+                  type="range"
+                  min="3000"
+                  max="15000"
+                  step="500"
+                  value={currentSettings.forceFlushMs}
+                  onChange={(e) => setCurrentSettings({ ...currentSettings, forceFlushMs: parseInt(e.target.value, 10) })}
+                  className="w-full accent-cyan-400"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                  <span>3 วิ (เข้มงวด)</span>
+                  <span>15 วิ (ประโยคยาว)</span>
+                </div>
+              </div>
             </div>
           )}
         </div>

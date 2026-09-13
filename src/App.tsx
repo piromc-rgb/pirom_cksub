@@ -190,6 +190,18 @@ export const App: React.FC = () => {
 
     // Trigger instant continuous streaming translation
     triggerStreamingTranslation(englishText);
+
+    // Force-finalize very long continuous speech (no natural pause) so the
+    // browser's speech engine doesn't silently truncate accumulated words.
+    if (!interimTimeoutRef.current) {
+      interimTimeoutRef.current = setTimeout(() => {
+        interimTimeoutRef.current = null;
+        const pending = latestInterimEnglishRef.current.trim();
+        if (pending) {
+          handleFinalSpeech(pending, 0.85);
+        }
+      }, settings.forceFlushMs);
+    }
   };
 
   // Handle Confirmed Sentence Finalization
@@ -215,6 +227,7 @@ export const App: React.FC = () => {
 
     if (interimTimeoutRef.current) {
       clearTimeout(interimTimeoutRef.current);
+      interimTimeoutRef.current = null;
     }
 
     const now = new Date();
@@ -297,6 +310,10 @@ export const App: React.FC = () => {
     if (isListening) {
       // Stop
       speechRecognizerRef.current?.stop();
+      if (interimTimeoutRef.current) {
+        clearTimeout(interimTimeoutRef.current);
+        interimTimeoutRef.current = null;
+      }
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach((t) => t.stop());
         audioStreamRef.current = null;

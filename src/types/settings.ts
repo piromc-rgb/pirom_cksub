@@ -21,6 +21,7 @@ export interface AppSettings {
   sttEngine: 'web-speech';
   translationEngine: 'free-fast' | 'gemini' | 'openai';
   duplicateGuardMs: number; // Window to suppress repeated final speech results (ms)
+  forceFlushMs: number; // Force-finalize continuous interim speech after this long with no pause (ms)
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -41,4 +42,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sttEngine: 'web-speech',
   translationEngine: 'free-fast',
   duplicateGuardMs: 4000,
+  forceFlushMs: 8000,
 };
