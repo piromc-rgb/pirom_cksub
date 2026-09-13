@@ -119,7 +119,6 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
       </div>
 
       {/* Main Stream Area */}
-      {/* Newest first: current interim on top, then confirmed subtitles newest-to-oldest below */}
       <div ref={streamRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-[380px] max-h-[600px]">
         {/* Empty State */}
         {subtitles.length === 0 && !currentInterim && (
@@ -152,7 +151,7 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
           </div>
         )}
 
-        {/* Current Active Interim Segment (newest, still being spoken) */}
+        {/* Current Active Interim Segment (newest, shown on top) */}
         {currentInterim && (
           <SubtitleItem
             key="interim-active"
@@ -161,7 +160,7 @@ export const LiveSubtitleFeed: React.FC<LiveSubtitleFeedProps> = ({
           />
         )}
 
-        {/* Confirmed Subtitles, newest first */}
+        {/* Existing Confirmed Subtitles: newest first, older ones flow downward */}
         {[...filteredSubtitles].reverse().map((segment) => (
           <SubtitleItem
             key={segment.id}

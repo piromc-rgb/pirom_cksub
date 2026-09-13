@@ -299,10 +299,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 3: Engine */}
           {activeTab === 'engine' && (
             <div className="space-y-5">
-              {/* Translation Engine */}
+              {/* SECTION 1: Speech-to-Text (STT) Engine */}
               <div>
                 <label className="block text-xs font-semibold text-slate-200 mb-1">
-                  เอนจินการแปลภาษา (Translation Engine)
+                  1. โมเดลถอดเสียงพูด (Speech-to-Text Engine)
+                </label>
+                <p className="text-[11px] text-slate-400 mb-2.5">
+                  เลือกเอนจินสำหรับแปลงเสียงพูดภาษาอังกฤษเป็นข้อความ Real-time
+                </p>
+                <div className="space-y-2">
+                  {/* Option 1: Web Speech API */}
+                  <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-800 bg-slate-900/50 cursor-pointer hover:border-slate-700 transition-colors">
+                    <input
+                      type="radio"
+                      name="sttEngine"
+                      value="web-speech"
+                      checked={currentSettings.sttEngine === 'web-speech'}
+                      onChange={() => setCurrentSettings({ ...currentSettings, sttEngine: 'web-speech' })}
+                      className="mt-1"
+                    />
+                    <div>
+                      <div className="text-xs font-semibold text-white flex items-center gap-2">
+                        <span>Web Speech API (ใช้งานฟรี / ไม่ต้องใช้ API Key)</span>
+                        <span className="px-2 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-300 rounded">ฟรีในตัวเครื่อง</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        ระบบแปลงเสียงพูดที่มีในตัวเบราว์เซอร์ Chrome / Edge / Safari ใช้งานได้ทันทีไม่ต้องตั้งค่า
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* SECTION 2: Translation Engine */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <label className="block text-xs font-semibold text-slate-200 mb-1">
+                  2. เอนจินการแปลภาษา (Translation Engine)
                 </label>
                 <div className="space-y-2 mt-2">
                   <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-800 bg-slate-900/50 cursor-pointer hover:border-slate-700">
@@ -356,6 +388,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}
                     </div>
                   </label>
+                </div>
+              </div>
+
+              {/* SECTION 3: Duplicate Guard Window */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <label className="block text-xs font-semibold text-slate-200 mb-1">
+                  3. ระยะเวลาป้องกันข้อความซ้ำ (Duplicate Guard Window)
+                </label>
+                <p className="text-[11px] text-slate-400 mb-2.5">
+                  เมื่อพูดเร็ว บางประโยคอาจถูกตีความว่าซ้ำแล้วถูกข้ามไปโดยไม่ตั้งใจ ลดค่านี้ลงถ้าเจอปัญหาข้อความหาย
+                  แต่ค่าที่ต่ำเกินไปอาจทำให้ข้อความซ้ำจริงๆ หลุดเข้ามาแสดงซ้ำได้
+                </p>
+                <div className="flex justify-between items-center text-xs mb-2">
+                  <span className="text-slate-300">ระยะเวลา (Window)</span>
+                  <span className="text-cyan-400 font-mono">{currentSettings.duplicateGuardMs} ms</span>
+                </div>
+                <input
+                  type="range"
+                  min="1000"
+                  max="4000"
+                  step="100"
+                  value={currentSettings.duplicateGuardMs}
+                  onChange={(e) => setCurrentSettings({ ...currentSettings, duplicateGuardMs: parseInt(e.target.value, 10) })}
+                  className="w-full accent-cyan-400"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                  <span>1000ms (ไวสุด)</span>
+                  <span>4000ms (ปลอดภัยสุด)</span>
                 </div>
               </div>
             </div>

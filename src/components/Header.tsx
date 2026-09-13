@@ -10,6 +10,7 @@ import {
   Tv,
   Headphones
 } from 'lucide-react';
+import { APP_VERSION } from '../version';
 
 interface HeaderProps {
   isListening: boolean;
@@ -58,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
                 CHAKEN Sub
               </span>
               <span className="px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-full">
-                AI Realtime
+                AI Realtime <span className="opacity-70 normal-case">v{APP_VERSION}</span>
               </span>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">

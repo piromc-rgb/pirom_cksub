@@ -18,7 +18,9 @@ export interface AppSettings {
   customTerms: TerminologyRule[];
   geminiApiKey?: string;
   openaiApiKey?: string;
+  sttEngine: 'web-speech';
   translationEngine: 'free-fast' | 'gemini' | 'openai';
+  duplicateGuardMs: number; // Window to suppress repeated final speech results (ms)
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -36,5 +38,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     { id: '5', source: 'backend', target: 'ระบบหลังบ้าน (Backend)' },
     { id: '6', source: 'deploy', target: 'นำระบบขึ้นใช้งานจริง (Deploy)' },
   ],
+  sttEngine: 'web-speech',
   translationEngine: 'free-fast',
+  duplicateGuardMs: 4000,
 };

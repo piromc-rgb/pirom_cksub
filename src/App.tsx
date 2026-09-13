@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { 
   Header 
 } from './components/Header';
@@ -31,11 +30,7 @@ import {
 import { SubtitleSegment, AudioInputMode } from './types/subtitle';
 import { AppSettings, DEFAULT_SETTINGS } from './types/settings';
 import { MeetingSpeechRecognizer } from './services/speechRecognition';
-import {
-  translateEnglishToThai,
-  isFreeTranslationRateLimited,
-  getFreeTranslationCooldownRemainingMs,
-} from './services/translationService';
+import { translateEnglishToThai } from './services/translationService';
 import { SubtitlePiPManager } from './services/pipManager';
 
 export const App: React.FC = () => {
@@ -77,10 +72,6 @@ export const App: React.FC = () => {
   const lastTranslatedTextRef = useRef<string>('');
   const lastFinalTextRef = useRef<string>('');
   const lastFinalTimeRef = useRef<number>(0);
-  const lastDispatchTimeRef = useRef<number>(0);
-  const pendingDispatchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isTranslationRateLimited, setIsTranslationRateLimited] = useState(false);
-  const rateLimitClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Save settings
   const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
@@ -115,14 +106,6 @@ export const App: React.FC = () => {
     }
   }, [currentInterim, subtitles]);
 
-  // Clean up pending translation timers on unmount
-  useEffect(() => {
-    return () => {
-      if (pendingDispatchTimerRef.current) clearTimeout(pendingDispatchTimerRef.current);
-      if (rateLimitClearTimerRef.current) clearTimeout(rateLimitClearTimerRef.current);
-    };
-  }, []);
-
   // Initialize Speech Recognizer
   useEffect(() => {
     speechRecognizerRef.current = new MeetingSpeechRecognizer({
@@ -145,36 +128,13 @@ export const App: React.FC = () => {
     };
   }, [audioMode, settings]);
 
-  // Surface it on screen when the free translation endpoints are rate-limited, and
-  // auto-clear the notice once their cooldown window has passed.
-  const refreshTranslationHealthStatus = () => {
-    const limited = isFreeTranslationRateLimited();
-    setIsTranslationRateLimited(limited);
-
-    if (rateLimitClearTimerRef.current) {
-      clearTimeout(rateLimitClearTimerRef.current);
-      rateLimitClearTimerRef.current = null;
-    }
-    if (limited) {
-      const remaining = getFreeTranslationCooldownRemainingMs();
-      rateLimitClearTimerRef.current = setTimeout(() => {
-        setIsTranslationRateLimited(isFreeTranslationRateLimited());
-      }, remaining + 250);
-    }
-  };
-
   // Real-time continuous streaming translation pipeline
-  // Throttled to a minimum interval between dispatches: the Web Speech API can fire
-  // interim results many times per second, and translating every single tick floods
-  // the free translation endpoints until they start rate-limiting the whole session.
-  const INTERIM_DISPATCH_INTERVAL_MS = 400;
-
-  const runTranslationQueue = () => {
+  const triggerStreamingTranslation = (text: string) => {
+    queuedTextRef.current = text;
     if (isTranslatingRef.current) return;
 
     const processQueue = async () => {
       isTranslatingRef.current = true;
-      lastDispatchTimeRef.current = Date.now();
       while (queuedTextRef.current && queuedTextRef.current !== lastTranslatedTextRef.current) {
         const textToTranslate = queuedTextRef.current;
         try {
@@ -198,31 +158,12 @@ export const App: React.FC = () => {
         } catch (err) {
           console.warn('Streaming translation caught error:', err);
           lastTranslatedTextRef.current = textToTranslate;
-        } finally {
-          refreshTranslationHealthStatus();
         }
       }
       isTranslatingRef.current = false;
     };
 
     processQueue();
-  };
-
-  const triggerStreamingTranslation = (text: string) => {
-    queuedTextRef.current = text;
-    if (isTranslatingRef.current) return;
-
-    const elapsed = Date.now() - lastDispatchTimeRef.current;
-    if (elapsed >= INTERIM_DISPATCH_INTERVAL_MS) {
-      runTranslationQueue();
-      return;
-    }
-
-    if (pendingDispatchTimerRef.current) return;
-    pendingDispatchTimerRef.current = setTimeout(() => {
-      pendingDispatchTimerRef.current = null;
-      runTranslationQueue();
-    }, INTERIM_DISPATCH_INTERVAL_MS - elapsed);
   };
 
   // Handle Interim (Word-by-word streaming)
@@ -263,7 +204,7 @@ export const App: React.FC = () => {
     const nowMs = Date.now();
     if (
       normalize(lastFinalTextRef.current) === normClean &&
-      nowMs - lastFinalTimeRef.current < 4000
+      nowMs - lastFinalTimeRef.current < settings.duplicateGuardMs
     ) {
       console.warn('Duplicate final speech skipped:', clean);
       return;
@@ -348,8 +289,7 @@ export const App: React.FC = () => {
           prev.map((s) => (s.id === segmentId ? { ...s, thaiText: refinedThai.trim() } : s))
         );
       }
-    }).catch(() => {})
-      .finally(() => refreshTranslationHealthStatus());
+    }).catch(() => {});
   };
 
   // Toggle listening
@@ -447,19 +387,6 @@ export const App: React.FC = () => {
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
       />
-
-      {/* Translation Rate-Limit Notice */}
-      {isTranslationRateLimited && (
-        <div className="w-full bg-amber-500/10 border-b border-amber-500/30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2 text-amber-300 text-xs sm:text-sm">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>
-              บริการแปลภาษาฟรีถูกจำกัดการใช้งานชั่วคราว (rate limit) คำบรรยายอาจไม่ถูกแปลชั่วขณะ
-              ระบบจะลองใหม่โดยอัตโนมัติภายในไม่กี่วินาที
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Main Workspace Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-4">
